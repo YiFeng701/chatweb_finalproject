@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>登入</title>
+
+    <style>
+        /* 背景圖片鋪滿畫面 */
+        body {
+            margin: 0;
+            padding: 0;
+            background-image: url("/static/背景.jpg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 透明面板的置中外框 */
+        .center-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 101vw;
+            max-width: 800px;
+            position: relative; /* 讓子元素能用 absolute 定位 */
+        }
+
+        /* 透明面板圖片 */
+        .panel-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* 左上角圓形頭像 */
+        .avatar {
+            position: absolute;
+            top: 24%;      /* 視需求可微調 */
+            left: 18%;     /* 視需求可微調 */
+            width: 12%;   /* panel 寬度 1/3 */
+            height: auto; /* 維持比例 */
+        }
+	
+	/* 輸入區 */
+	.input-area {
+	    position: absolute;
+	    top: 55%;
+	    left: 50%;
+	    transform: translate(-50%, -50%);
+	    width: 60%;
+	    font-size: clamp(8px, 1.2vw, 18px);
+	    color: white;
+	}
+	.input-row {
+	    display: grid;
+	    grid-template-columns: 15% 80%;
+	    margin-top: 10px;
+        }
+	span {
+	    font-size: clamp(8px, 1.3vw, 20px);
+	}
+        input {
+	    width: 100%;
+   	    padding: 0.01vw 1vw;
+	    background: rgba(0, 0, 0, 0.4);
+	    border: 1px solid white;
+	    color: white;
+	    font-size: 1.5vw
+        }
+
+	/* 按鈕 */
+	.button-row {
+	    margin-top: 2vw;
+	    display: flex;
+	    justify-content: center;
+	    gap: 10vw;
+	}
+	button {
+	    width: 50%;
+	    max-width: 100px;
+	    padding: 0.8vw 1.2vw;
+	    background: rgba(255, 255, 255, 0.8);
+	    border: none;
+	    border-radius: 8px;
+	    font-size: clamp(8px, 1.2vw, 18px);
+	    cursor: pointer;
+	}
+	button:hover {
+	    background: rgba(255, 255, 255, 1);
+	}
+    </style>
+</head>
+
+<body>
+
+    <div class="center-container">
+
+        <!-- 左上角頭像 -->
+        <img src="/static/空頭像.png" class="avatar">
+
+        <!-- 透明面板 -->
+        <img src="/static/透明面板.png" class="panel-image">
+
+	<div class="input-area">
+	    <div class="input-row">
+	        <span>用戶:</span>
+	        <input type="text" id="inputUser">
+	    </div>
+
+	    <div class="input-row">
+	        <span>Gmail:</span>
+	        <input type="text" id="inputGmail">
+	    </div>
+
+	    <div class="input-row">
+	        <span>密碼:</span>
+	        <input type="text" id="password">
+	    </div>
+
+	    <div class="button-row">
+		<button onclick="register()">註冊</button>
+		<button onclick="login()">登入</button>
+	    </div>
+	</div>
+    </div>
+
+    <script>
+    function login() {
+	const user = document.getElementById("inputUser").value;
+	const gmail = document.getElementById("inputGmail").value;
+	const password = document.getElementById("password").value;
+
+	fetch("/login", {
+	    method: "POST",
+	    headers: {
+	 	"Content-Type": "application/json"
+	    },
+	    body: JSON.stringify({
+		username: user,
+		gmail: gmail,
+		password: password
+	    })
+	})
+	.then(res => res.json())
+	.then(data => {
+	    alert(data.message);
+
+	    if(data.success) {
+		document.getElementById("inputUser").value = "";
+		document.getElementById("inputGmail").value = "";
+		document.getElementById("password").value = "";
+		window.location.href = "/home";
+	    }
+	})
+    }
+
+    function register() {
+	const user = document.getElementById("inputUser").value;
+	const gmail = document.getElementById("inputGmail").value;
+	const password = document.getElementById("password").value;
+
+	fetch("/register", {
+	    method: "POST",
+	    headers: {
+		"Content-Type": "application/json"
+	    },
+	    body: JSON.stringify({
+		username: user,
+		gmail: gmail,
+		password: password
+	    })
+	})
+	.then(res => res.json())
+	.then(data => {
+	    alert(data.message);
+
+	    if(data.success) {
+		document.getElementById("inputUser").value = "";
+		document.getElementById("inputGmail").value = "";
+		document.getElementById("password").value = "";
+		window.location.href = "/home";
+	    }
+	})
+	.catch(err =>{
+	    console.error("註冊失敗: ", err);
+	    alert("註冊發生錯誤 ! ");
+	});
+    }
+    </script>
+
+</body>
+</html>
