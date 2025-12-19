@@ -96,9 +96,7 @@
 </head>
 
 <body>
-
     <div class="center-container">
-
         <!-- 左上角頭像 -->
         <img src="/static/空頭像.png" class="avatar">
 
@@ -107,18 +105,13 @@
 
 	<div class="input-area">
 	    <div class="input-row">
-	        <span>用戶:</span>
-	        <input type="text" id="inputUser">
-	    </div>
-
-	    <div class="input-row">
-	        <span>Gmail:</span>
-	        <input type="text" id="inputGmail">
+	        <span>帳號:</span>
+	        <input type="text" id="account">
 	    </div>
 
 	    <div class="input-row">
 	        <span>密碼:</span>
-	        <input type="text" id="password">
+	        <input type="password" id="password">
 	    </div>
 
 	    <div class="button-row">
@@ -130,59 +123,72 @@
 
     <script>
     function login() {
-	const user = document.getElementById("inputUser").value;
-	const gmail = document.getElementById("inputGmail").value;
+	const account = document.getElementById("account").value;
 	const password = document.getElementById("password").value;
+
+    if (!account || !password) {
+        alert("請輸入帳號與密碼");
+        return;
+    }
 
 	fetch("/login", {
 	    method: "POST",
 	    headers: {
-	 	"Content-Type": "application/json"
+	 	    "Content-Type": "application/json"
 	    },
 	    body: JSON.stringify({
-		username: user,
-		gmail: gmail,
-		password: password
+            account: account,
+            password: password
 	    })
 	})
-	.then(res => res.json())
+	.then(res => {
+        if(!res.ok)  throw new Error("HTTP error")
+        return res.json();
+    })
 	.then(data => {
 	    alert(data.message);
 
 	    if(data.success) {
-		document.getElementById("inputUser").value = "";
-		document.getElementById("inputGmail").value = "";
-		document.getElementById("password").value = "";
-		window.location.href = "/home";
+            document.getElementById("account").value = "";
+            document.getElementById("password").value = "";
+            window.location.href = "/home";
 	    }
 	})
+    .catch(err => {
+        console.error("登入失敗:", err);
+        alert("登入發生錯誤 ! ")
+    })
     }
 
     function register() {
-	const user = document.getElementById("inputUser").value;
-	const gmail = document.getElementById("inputGmail").value;
+	const account = document.getElementById("account").value;
 	const password = document.getElementById("password").value;
+
+    if (!account || !password) {
+        alert("請輸入帳號與密碼");
+        return;
+    }
 
 	fetch("/register", {
 	    method: "POST",
 	    headers: {
-		"Content-Type": "application/json"
+		    "Content-Type": "application/json"
 	    },
 	    body: JSON.stringify({
-		username: user,
-		gmail: gmail,
-		password: password
+            account: account,
+            password: password
 	    })
 	})
-	.then(res => res.json())
+	.then(res => {
+        if(!res.ok)  throw new Error("HTTP error")
+        return res.json();
+    })
 	.then(data => {
 	    alert(data.message);
 
 	    if(data.success) {
-		document.getElementById("inputUser").value = "";
-		document.getElementById("inputGmail").value = "";
-		document.getElementById("password").value = "";
-		window.location.href = "/home";
+            document.getElementById("account").value = "";
+            document.getElementById("password").value = "";
 	    }
 	})
 	.catch(err =>{
