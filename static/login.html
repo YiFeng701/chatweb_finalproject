@@ -122,81 +122,100 @@
     </div>
 
     <script>
-    function login() {
-	const account = document.getElementById("account").value;
-	const password = document.getElementById("password").value;
-
-    if (!account || !password) {
-        alert("請輸入帳號與密碼");
-        return;
-    }
-
-	fetch("/login", {
-	    method: "POST",
-	    headers: {
-	 	    "Content-Type": "application/json"
-	    },
-	    body: JSON.stringify({
-            account: account,
-            password: password
-	    })
-	})
-	.then(res => {
-        if(!res.ok)  throw new Error("HTTP error")
-        return res.json();
-    })
-	.then(data => {
-	    alert(data.message);
-
-	    if(data.success) {
-            document.getElementById("account").value = "";
-            document.getElementById("password").value = "";
-            window.location.href = "/home";
-	    }
-	})
-    .catch(err => {
-        console.error("登入失敗:", err);
-        alert("登入發生錯誤 ! ")
-    })
-    }
-
     function register() {
-	const account = document.getElementById("account").value;
-	const password = document.getElementById("password").value;
+		const account = document.getElementById("account").value;
+		const password = document.getElementById("password").value;
 
-    if (!account || !password) {
-        alert("請輸入帳號與密碼");
-        return;
+		if (!account || !password) {
+			alert("請輸入帳號與密碼");
+			return;
+		}
+
+		fetch("/register", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+				account: account,
+				password: password
+			})
+		})
+		.then(res => {
+			if(!res.ok)  throw new Error("HTTP error")
+			return res.json();
+		})
+		.then(data => {
+			alert(data.message);
+
+			if(data.success) {
+				document.getElementById("account").value = "";
+				document.getElementById("password").value = "";
+			}
+		})
+		.catch(err =>{
+			console.error("註冊失敗: ", err);
+			alert("註冊發生錯誤 ! ");
+		});
     }
 
-	fetch("/register", {
-	    method: "POST",
-	    headers: {
-		    "Content-Type": "application/json"
-	    },
-	    body: JSON.stringify({
-            account: account,
-            password: password
-	    })
-	})
-	.then(res => {
-        if(!res.ok)  throw new Error("HTTP error")
-        return res.json();
-    })
-	.then(data => {
-	    alert(data.message);
+    function login() {
+		const account = document.getElementById("account").value;
+		const password = document.getElementById("password").value;
 
-	    if(data.success) {
-            document.getElementById("account").value = "";
-            document.getElementById("password").value = "";
-	    }
-	})
-	.catch(err =>{
-	    console.error("註冊失敗: ", err);
-	    alert("註冊發生錯誤 ! ");
-	});
+		if (!account || !password) {
+			alert("請輸入帳號與密碼");
+			return;
+		}
+
+		fetch("/login", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+				account: account,
+				password: password
+			})
+		})
+		.then(res => {
+			if(!res.ok)  throw new Error("HTTP error")
+			return res.json();
+		})
+		.then(data => {
+			alert(data.message);
+
+			if(data.success) {
+				document.getElementById("account").value = "";
+				document.getElementById("password").value = "";
+				window.location.href = "/home";
+			}
+		})
+		.catch(err => {
+			console.error("登入失敗:", err);
+			alert("登入發生錯誤 ! ")
+		})
     }
+
+	function refreshToken() {
+		return fetch("/refresh", {
+			method: "POST",
+			credentials: "include"
+		})
+		.then(res => {
+			if (!res.ok) {
+				throw new Error("unauthorized");
+			}
+			return res.json();
+		})
+		.then(data => {
+			return data.success === true;
+		})
+		.catch(err => {
+			window.location.href = "/";
+			return false;
+		});
+	}
     </script>
-
 </body>
 </html>

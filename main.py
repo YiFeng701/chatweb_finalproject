@@ -1,11 +1,11 @@
 from fastapi import FastAPI,Depends, HTTPException, status, Response, Cookie
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel
+import bcrypt
 import sqlite3
 
 class LoginRequest(BaseModel):
@@ -34,11 +34,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIER_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7 
 
-oauth2_schema = OAuth2PasswordBearer(tokenUrl="login")
-
 def create_access_token(data: dict, expires_delta : Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIER_MINUTES))
     to_encode.update({"exp" : expire})
     encode_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm = ALGORITHM)
     return encode_jwt
@@ -53,6 +51,11 @@ def verify_token(token: str):
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     
+def get_user(jwt: Optional[str] = Cookie(None)):
+    if jwt is None:
+        raise HTTPException(status_code=401)
+    return verify_token(jwt)
+
 def create_refresh_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
@@ -76,9 +79,13 @@ def register_userdata(req: LoginRequest):
     try:
         with sqlite3.connect("user.db") as conn:
             cur = conn.cursor()
+            hash_password = bcrypt.hashpw(
+                req.password.encode("utf-8"),
+                bcrypt.gensalt()
+            )
 
             cur.execute("INSERT INTO users (account, password) VALUES (?, ?)",
-                        (req.account, req.password))
+                        (req.account, hash_password))
             conn.commit()
             return {"success": True, "message": "註冊成功，請登入"}
     except sqlite3.IntegrityError:
@@ -87,7 +94,7 @@ def register_userdata(req: LoginRequest):
         return {"success": False, "message": f"註冊發生錯誤: {e}"}
 
 @app.post("/login")
-def login_userdata(req: LoginRequest, response: Response = None):
+def login_userdata(req: LoginRequest, response: Response):
     with sqlite3.connect("user.db") as conn:
         cur = conn.cursor()
 
@@ -96,7 +103,10 @@ def login_userdata(req: LoginRequest, response: Response = None):
 
         if row is None:
             return {"success": False, "message": "使用者不存在，請先註冊"}
-        if row[1] != req.password:
+        if not bcrypt.checkpw(
+            req.password.encode("utf-8"),
+            row[1]
+        ):
             return {"success": False, "message": "密碼錯誤"}
         
         access_token = create_access_token({"sub" : row[0]})
@@ -141,9 +151,12 @@ def refresh_token(refresh: Optional[str] = Cookie(None)):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     
     new_access_token = create_access_token({"sub": account})
-    new_refresh_token = create_refresh_token({"sub", account})
+    new_refresh_token = create_refresh_token({"sub": account})
 
-    response = Response()
+    response = JSONResponse(content = {
+        "success": True,
+        "access_token": new_access_token
+    })
     response.set_cookie(
         key = "jwt",
         value = new_access_token,
@@ -159,6 +172,8 @@ def refresh_token(refresh: Optional[str] = Cookie(None)):
         max_age = 7 * 24 * 60 *60
     )
 
+    return response
+
 @app.get("/home", response_class=HTMLResponse)
-def home_page():
-    return "Success!!!"
+def home_page(account: str = Depends(get_user)):
+    return f"Welcome {account}"
