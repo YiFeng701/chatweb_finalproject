@@ -1,4 +1,4 @@
-from fastapi import FastAPI,Depends, HTTPException, status, Response, Cookie
+from fastapi import FastAPI,Depends, HTTPException, status, Response, Cookie, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
@@ -15,15 +15,41 @@ class LoginRequest(BaseModel):
     def all(self):
         return bool(self.account and self.password)
 
-# 建資料庫
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for conn in self.active_connections:
+            await conn.send_text(message)
+
+manager = ConnectionManager()
+
 first_conn = sqlite3.connect("user.db")
 first_cur = first_conn.cursor()
+# 建資料庫
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account TEXT UNIQUE,
     password TEXT
 )                  
+""")
+# 建對話庫
+first_cur.execute("""
+CREATE TABLE IF NOT EXISTS messages(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT,
+    content TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
 """)
 first_conn.commit()
 first_conn.close()
@@ -45,11 +71,9 @@ def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms = ALGORITHM)
         account = payload.get("sub")
-        if account is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         return account
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        return None
     
 def get_user(jwt: Optional[str] = Cookie(None)):
     if jwt is None:
@@ -127,7 +151,6 @@ def login_userdata(req: LoginRequest, response: Response):
             max_age = 7 * 24 * 60 *60
         )
 
-        
         return {
             "success": True, 
             "message": "登入成功",
@@ -174,6 +197,35 @@ def refresh_token(refresh: Optional[str] = Cookie(None)):
 
     return response
 
+@app.websocket("/ws/chat")
+async def chat(websocket: WebSocket, token: str = Query(...)):    
+    username = verify_token(token)
+    if not username:
+        await websocket.close(code = 1008)
+        return
+    await manager.connect(websocket)
+
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            await manager.broadcast(f"{username}: {msg}")
+            with sqlite3.connect("user.db") as conn:
+                cur = conn.cursor()
+                cur.execute("INSERT INTO messages (username, content) VALUES (?, ?)", (username, msg))
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+@app.get("/messages")
+def get_msg(limit: int = 50):  # 取limit條訊息
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT username, content, created_at FROM messages ORDER BY id DESC LIMIT ?", (limit, ))
+        row = cur.fetchall()
+
+    row.reverse()
+
+    return [{"username": r[0], "content": r[1], "created_at": r[2]} for r in row]
+
 @app.get("/home", response_class=HTMLResponse)
 def home_page(account: str = Depends(get_user)):
-    return f"Welcome {account}"
+    return FileResponse("static/home.html")

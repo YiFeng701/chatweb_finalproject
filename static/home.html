@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天室</title>
+
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+        }
+
+        h2 {
+            margin: 10px;
+            text-align: center;
+        }
+
+        #chat {
+            flex: 1;                    /* 撐滿剩餘空間 */
+            list-style: none;
+            padding: 10px;
+            margin: 0;
+            overflow-y: auto;           /* 訊息多可捲動 */
+            border-top: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+        }
+
+        #input-area {
+            display: flex;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        #msg {
+            flex: 1;
+            padding: 8px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<h2>聊天室</h2>
+
+<ul id="chat"></ul>
+
+<div id="input-area">
+    <input id="msg" placeholder="輸入訊息..."></input>
+    <button onclick="send()">送出</button>
+</div>
+
+<script>
+    let ws = null;
+    const input = document.getElementById("msg")
+
+    fetch("/messages")
+    .then(res => res.json())
+    .then(data =>{
+        const chat = document.getElementById("chat");
+        data.forEach(msg => {
+            const li = document.createElement("li");
+            li.innerText = `${msg.username}: ${msg.content}`;
+            chat.appendChild(li);
+        });
+        chat.scrollTop = chat.scrollHeight;
+    })
+
+    fetch("/refresh", { method: "POST" })
+    .then(res => res.json())
+    .then(data => {
+        ws = new WebSocket(
+            `ws://localhost:8000/ws/chat?token=${data.access_token}`
+        );
+        ws.onmessage = function (event) {
+            let li = document.createElement("li");
+            li.innerText = event.data;
+            document.getElementById("chat").appendChild(li);
+
+            // 自動捲到最新訊息
+            document.getElementById("chat").scrollTop =
+                document.getElementById("chat").scrollHeight;
+        };
+        ws.onclose = function(){
+            console.log("WebSocket close")
+        }
+    });
+
+    function send() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            alert("尚未連線聊天室");
+            return;
+        }
+
+        const input = document.getElementById("msg");
+        if (input.value.trim() === "") return;
+
+        ws.send(input.value);
+        input.value = "";
+    }    
+
+    input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send();
+        }
+    });
+</script>
+
+</body>
+</html>
