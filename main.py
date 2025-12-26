@@ -1,14 +1,18 @@
-from fastapi import FastAPI,Depends, HTTPException, status, Response, Cookie, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Cookie, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from jose import JWTError, jwt
-from datetime import datetime, timedelta
-from typing import Optional
 from pydantic import BaseModel
 import bcrypt
 import sqlite3
 import json
 
+# --- 這裡匯入我們拆分出去的模組 ---
+# 請確保同一層目錄下有 dependencies.py
+from dependencies import create_access_token, create_refresh_token, verify_token, get_user
+# 請確保有 routers 資料夾，裡面有 tasks.py
+from routers import tasks 
+
+# 定義 Request 模型 (這些只在 main 用到，所以留著)
 class LoginRequest(BaseModel):
     account: str
     password: str
@@ -19,6 +23,7 @@ class LoginRequest(BaseModel):
 class Username(BaseModel):
     name: str
 
+# WebSocket 連線管理器 (這是聊天室核心，保留在 main)
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, dict] = {}
@@ -46,12 +51,13 @@ class ConnectionManager:
             sender_name = self.active_connections[sender_account]["name"]
             await ws["ws"].send_text(f"(私訊){sender_name}: {message}")
 
-
 manager = ConnectionManager()
 
+# --- 初始化資料庫 ---
 first_conn = sqlite3.connect("user.db")
 first_cur = first_conn.cursor()
-# 建資料庫
+
+# 1. Users 表
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +66,7 @@ CREATE TABLE IF NOT EXISTS users(
     name TEXT
 )                  
 """)
-# 建對話庫
+# 2. Messages 表
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS messages(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,46 +75,32 @@ CREATE TABLE IF NOT EXISTS messages(
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
+# 3. Tasks 表 (新增的任務系統表格)
+first_cur.execute("""
+CREATE TABLE IF NOT EXISTS tasks(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account TEXT,
+    title TEXT,
+    description TEXT,       -- 新增：細節
+    deadline TEXT,          -- 新增：最後時間
+    is_completed BOOLEAN DEFAULT 0
+)
+""")
 
 first_conn.commit()
 first_conn.close()
 
-# 登入後的認證token
-SECRET_KEY = "secret-key-ohya"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIER_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7 
 
-def create_access_token(data: dict, expires_delta : Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIER_MINUTES))
-    to_encode.update({"exp" : expire})
-    encode_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm = ALGORITHM)
-    return encode_jwt
-
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms = ALGORITHM)
-        account = payload.get("sub")
-        return account
-    except JWTError:
-        return None
-    
-def get_user(jwt: Optional[str] = Cookie(None)):
-    if jwt is None:
-        raise HTTPException(status_code=401)
-    return verify_token(jwt)
-
-def create_refresh_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp" : expire, "type" : "refresh"})
-    encode_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm = ALGORITHM)
-    return encode_jwt
-
+# --- FastAPI App 初始化 ---
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# **關鍵步驟：掛載任務系統的 Router**
+app.include_router(tasks.router)
+
+
+# --- 原本的路由與邏輯 ---
 
 @app.get("/", response_class=HTMLResponse)
 def root():
@@ -152,6 +144,7 @@ def login_userdata(req: LoginRequest, response: Response):
         ):
             return {"success": False, "message": "密碼錯誤"}
         
+        # 這裡呼叫的是 dependencies 匯入的函式
         access_token = create_access_token({"sub" : row[0]})
         refresh_token = create_refresh_token({"sub" : row[0]})
 
@@ -178,9 +171,13 @@ def login_userdata(req: LoginRequest, response: Response):
         }
 
 @app.post("/refresh")
-def refresh_token(refresh: Optional[str] = Cookie(None)):
+def refresh_token_endpoint(refresh: str | None = Cookie(None)): # 為了避免命名衝突，改個函式名
     if refresh is None:
         raise HTTPException(status_code=401, detail="Missing refresh token")
+    
+    # 這裡的邏輯我稍微簡化，因為 verify_token 已經在 dependencies 裡了
+    # 但為了原本的 refresh 邏輯，我們需要解碼判斷 type
+    from dependencies import SECRET_KEY, ALGORITHM, jwt, JWTError # 局部引用，避免汙染全域
     
     try:
         payload = jwt.decode(refresh, SECRET_KEY, algorithms = ALGORITHM)
@@ -239,6 +236,7 @@ def get_name(account: str = Depends(get_user)):
 
 @app.websocket("/ws/chat")
 async def chat(websocket: WebSocket, token: str = Query(...)):    
+    # 這裡使用 dependencies 裡的 verify_token
     account = verify_token(token)
     if not account:
         await websocket.close(code = 1008)
@@ -269,7 +267,7 @@ async def chat(websocket: WebSocket, token: str = Query(...)):
         manager.disconnect(websocket)
 
 @app.get("/messages")
-def get_msg(limit: int = 50):  # 取limit條訊息
+def get_msg(limit: int = 50): 
     with sqlite3.connect("user.db") as conn:
         cur = conn.cursor()
         cur.execute("""
