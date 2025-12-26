@@ -7,6 +7,7 @@ from typing import Optional
 from pydantic import BaseModel
 import bcrypt
 import sqlite3
+import json
 
 class LoginRequest(BaseModel):
     account: str
@@ -15,20 +16,36 @@ class LoginRequest(BaseModel):
     def all(self):
         return bool(self.account and self.password)
 
+class Username(BaseModel):
+    name: str
+
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: dict[str, dict] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, account: str, name: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections[account] = {
+            "ws" : websocket,
+            "name" : name
+        }
     
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        for account, data in list(self.active_connections.items()):
+            if data["ws"] == websocket:
+                del self.active_connections[account]
 
-    async def broadcast(self, message: str):
-        for conn in self.active_connections:
-            await conn.send_text(message)
+    async def broadcast(self,account: str, message: str):
+        sender = self.active_connections[account]["name"]
+        for ws in self.active_connections.values():
+            await ws["ws"].send_text(f"{sender}: {message}")
+
+    async def send_personal(self, to_account: str, sender_account: str, message: str):
+        ws = self.active_connections.get(to_account)
+        if ws:
+            sender_name = self.active_connections[sender_account]["name"]
+            await ws["ws"].send_text(f"(私訊){sender_name}: {message}")
+
 
 manager = ConnectionManager()
 
@@ -39,18 +56,20 @@ first_cur.execute("""
 CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account TEXT UNIQUE,
-    password TEXT
+    password TEXT,
+    name TEXT
 )                  
 """)
 # 建對話庫
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS messages(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT,
+    account TEXT,
     content TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
+
 first_conn.commit()
 first_conn.close()
 
@@ -108,8 +127,8 @@ def register_userdata(req: LoginRequest):
                 bcrypt.gensalt()
             )
 
-            cur.execute("INSERT INTO users (account, password) VALUES (?, ?)",
-                        (req.account, hash_password))
+            cur.execute("INSERT INTO users (account, password, name) VALUES (?, ?, ?)",
+                        (req.account, hash_password, req.account))
             conn.commit()
             return {"success": True, "message": "註冊成功，請登入"}
     except sqlite3.IntegrityError:
@@ -197,21 +216,55 @@ def refresh_token(refresh: Optional[str] = Cookie(None)):
 
     return response
 
+@app.post("/user/username")
+def update_name(req:Username, account: str = Depends(get_user)):
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET name = ? WHERE account = ?", (req.name, account))
+        conn.commit()
+    
+    if account in manager.active_connections:
+        manager.active_connections[account]["name"] = req.name
+
+    return {"success": True}
+
+@app.get("/user/username")
+def get_name(account: str = Depends(get_user)):
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM users WHERE account = ?", (account, ))
+        row = cur.fetchone()
+
+    return {"name": row[0]}
+
 @app.websocket("/ws/chat")
 async def chat(websocket: WebSocket, token: str = Query(...)):    
-    username = verify_token(token)
-    if not username:
+    account = verify_token(token)
+    if not account:
         await websocket.close(code = 1008)
         return
-    await manager.connect(websocket)
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM users WHERE account = ?", (account,))
+        row = cur.fetchone()
+    name = row[0] if row else account
+    await manager.connect(websocket, account, name)
 
     try:
         while True:
-            msg = await websocket.receive_text()
-            await manager.broadcast(f"{username}: {msg}")
+            msg = json.loads(await websocket.receive_text())
+            to = msg.get("to")
+            content = msg.get("message")
+
+            if to and to != "all":
+                await manager.send_personal(to, account, content)
+            else:
+                await manager.broadcast(account, content)
+
             with sqlite3.connect("user.db") as conn:
                 cur = conn.cursor()
-                cur.execute("INSERT INTO messages (username, content) VALUES (?, ?)", (username, msg))
+                cur.execute("INSERT INTO messages (account, content) VALUES (?, ?)", (account, content))
+                conn.commit()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -219,13 +272,18 @@ async def chat(websocket: WebSocket, token: str = Query(...)):
 def get_msg(limit: int = 50):  # 取limit條訊息
     with sqlite3.connect("user.db") as conn:
         cur = conn.cursor()
-        cur.execute("SELECT username, content, created_at FROM messages ORDER BY id DESC LIMIT ?", (limit, ))
+        cur.execute("""
+            SELECT m.account, u.name, m.content, m.created_at
+            FROM messages m
+            JOIN users u ON m.account = u.account
+            ORDER BY m.id DESC
+            LIMIT ?
+        """, (limit,))
         row = cur.fetchall()
 
     row.reverse()
-
-    return [{"username": r[0], "content": r[1], "created_at": r[2]} for r in row]
+    return [{"account": r[0], "name": r[1], "content": r[2], "created_at": r[3]} for r in row]
 
 @app.get("/home", response_class=HTMLResponse)
-def home_page(account: str = Depends(get_user)):
+def home_page():
     return FileResponse("static/home.html")

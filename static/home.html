@@ -40,10 +40,25 @@
             font-size: 16px;
         }
 
-        button {
+        #input-area button {
             padding: 8px 16px;
             font-size: 16px;
             cursor: pointer;
+        }
+
+        #user-area {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        #user-area button {
+            font-size: 14px;
+            padding: 4px 8px;
         }
     </style>
 </head>
@@ -51,64 +66,123 @@
 
 <h2>聊天室</h2>
 
+<div id="user-area">
+    <span id="username">使用者</span>
+    <button onclick="changeName()">修改名稱</button>
+</div>
+
 <ul id="chat"></ul>
 
 <div id="input-area">
+    <select id="recipient">
+        <option value="all">全部</option>
+    </select>
     <input id="msg" placeholder="輸入訊息..."></input>
     <button onclick="send()">送出</button>
 </div>
 
 <script>
     let ws = null;
-    const input = document.getElementById("msg")
-
-    fetch("/messages")
-    .then(res => res.json())
-    .then(data =>{
-        const chat = document.getElementById("chat");
-        data.forEach(msg => {
-            const li = document.createElement("li");
-            li.innerText = `${msg.username}: ${msg.content}`;
-            chat.appendChild(li);
-        });
-        chat.scrollTop = chat.scrollHeight;
-    })
+    let UserName = "";
+    const input = document.getElementById("msg");
+    const recipient = document.getElementById("recipient");
+    const usernameSpan = document.getElementById("username");
 
     fetch("/refresh", { method: "POST" })
     .then(res => res.json())
     .then(data => {
-        ws = new WebSocket(
-            `ws://localhost:8000/ws/chat?token=${data.access_token}`
-        );
-        ws.onmessage = function (event) {
-            let li = document.createElement("li");
+        ws = new WebSocket(`ws://localhost:8000/ws/chat?token=${data.access_token}`);
+
+        ws.onopen = function(){
+            console.log("WebSocket已連線")
+        }
+        ws.onmessage = function(event){
+            const li = document.createElement("li");
             li.innerText = event.data;
             document.getElementById("chat").appendChild(li);
-
-            // 自動捲到最新訊息
-            document.getElementById("chat").scrollTop =
-                document.getElementById("chat").scrollHeight;
+            document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
         };
         ws.onclose = function(){
             console.log("WebSocket close")
         }
     });
 
-    function send() {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
+    function changeName(){
+        const newname = prompt("請輸入欲修改的用戶名稱 : ", UserName);
+        if(!newname || newname.trim() === "")  return;
+
+        fetch("/user/username", {
+            method: "POST",
+            credentials: "include",
+            headers:{
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                name: newname.trim()
+            })
+        })
+        .then(res => {
+			if(!res.ok)  throw new Error("修改失敗");
+			return res.json();
+		})
+		.then(data => {
+            if(!data.success){
+                alert("修改失敗");
+                return;
+            }
+			UserName = newname.trim();
+            usernameSpan.innerText = UserName;
+            alert("名稱修改成功\n請刷新頁面以更新舊訊息");
+		})
+        .catch(err => {
+            alert("請求錯誤");
+            console.error(err);
+        })
+    }
+
+    function loadName(){
+        fetch("/user/username", {
+            credentials: "include"
+        })
+        .then(res => res.json())
+        .then(data => {
+            UserName = data.name;
+            usernameSpan.innerText = UserName;
+        })
+        .catch(err => {
+            alert("讀取名稱錯誤")
+            console.error(err);
+        })
+    }
+    loadName();
+
+    fetch("/messages")
+    .then(res => res.json())
+    .then(data => {
+        const chat = document.getElementById("chat");
+        data.forEach(msg => {
+            const li = document.createElement("li");
+            li.innerText = `${msg.name}: ${msg.content}`;
+            chat.appendChild(li);
+        });
+        chat.scrollTop = chat.scrollHeight;
+    })
+
+    function send(){
+        if(!ws || ws.readyState !== WebSocket.OPEN){
             alert("尚未連線聊天室");
             return;
         }
+        const msg = input.value.trim();
+        if(!msg) return;
 
-        const input = document.getElementById("msg");
-        if (input.value.trim() === "") return;
-
-        ws.send(input.value);
+        const to = recipient.value; // "all" 表示廣播
+        ws.send(JSON.stringify({to: to, message: msg}));
         input.value = "";
-    }    
+    }
 
-    input.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.shiftKey) {
+    input.addEventListener("keydown", function(e){
+        if(e.key === "Enter" && !e.shiftKey){
             e.preventDefault();
             send();
         }

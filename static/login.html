@@ -142,7 +142,7 @@
 			})
 		})
 		.then(res => {
-			if(!res.ok)  throw new Error("HTTP error")
+			if(!res.ok)  throw new Error("HTTP error");
 			return res.json();
 		})
 		.then(data => {
@@ -179,7 +179,7 @@
 			})
 		})
 		.then(res => {
-			if(!res.ok)  throw new Error("HTTP error")
+			if(!res.ok)  throw new Error("HTTP error");
 			return res.json();
 		})
 		.then(data => {
@@ -216,6 +216,22 @@
 			return false;
 		});
 	}
+
+	const account_input = document.getElementById("account");
+	const password_input = document.getElementById("password")
+	
+	account_input.addEventListener("keydown", function(e){
+		if(e.key === "Enter"){
+			e.preventDefault();
+			password_input.focus();
+		}
+	})
+	password_input.addEventListener("keydown", function(e){
+		if(e.key === "Enter"){
+			e.preventDefault();
+			login();
+		}
+	})
     </script>
 </body>
 </html>
