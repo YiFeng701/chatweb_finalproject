@@ -105,6 +105,17 @@
         .task-completed .btn-check {
             background-color: #bdc3c7;
         }
+        /* 編輯按鈕樣式 */
+        .btn-edit-task {
+            background-color: #f39c12; /* 橘色 */
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        .btn-edit-task:hover { background-color: #e67e22; }
     </style>
 </head>
 <body>
@@ -206,6 +217,8 @@
     // --- 任務系統 (Modal 版本) ---
     // ==========================================
     // 定義 loadName 函式
+    let allTasks = [];       // 用來暫存所有任務資料
+    let editingTaskId = null; // 用來記錄現在正在編輯哪一個任務 (null 代表是新增模式)
     function loadName(){
         fetch("/user/username")
         .then(res => res.json())
@@ -216,16 +229,44 @@
         .catch(err => console.error("無法讀取暱稱", err));
     }
     // 1. 開啟視窗
-    function openModal() {
-        document.getElementById('taskModal').style.display = 'flex';
-        document.getElementById('m-deadline').value = ""; // 清空時間
-        document.getElementById('m-title').value = "";
-        document.getElementById('m-desc').value = "";
+    function openModal(isEditMode = false) {
+        const modal = document.getElementById('taskModal');
+        const titleLabel = document.querySelector('#taskModal h3');
+
+        modal.style.display = 'flex';
+
+        if (!isEditMode) {
+            // --- 新增模式 ---
+            editingTaskId = null; // 清空編輯 ID
+            titleLabel.innerText = "新增待辦事項";
+            // 清空輸入框
+            document.getElementById('m-title').value = "";
+            document.getElementById('m-desc').value = "";
+            document.getElementById('m-deadline').value = "";
+        }
     }
 
+    function editTask(id) {
+        // 從暫存的陣列中找到這筆任務
+        const task = allTasks.find(t => t.id === id);
+        if (!task) return;
+
+        // 設定為編輯模式
+        editingTaskId = id;
+        document.querySelector('#taskModal h3').innerText = "編輯待辦事項";
+
+        // 把舊資料填進去
+        document.getElementById('m-title').value = task.title;
+        document.getElementById('m-desc').value = task.description || "";
+        document.getElementById('m-deadline').value = task.deadline || "";
+
+        // 開啟視窗 (傳入 true 代表是編輯模式)
+        openModal(true);
+    }
     // 2. 關閉視窗
     function closeModal() {
         document.getElementById('taskModal').style.display = 'none';
+        editingTaskId = null; // 關閉時重置狀態
     }
 
     // 3. 送出資料 (呼叫後端)
@@ -236,64 +277,84 @@
 
         if(!title) return alert("請至少輸入標題");
 
-        const res = await fetch('/tasks/', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                title: title,
-                description: desc,
-                deadline: deadline, // 這裡會傳送 datetime string (例如 "2023-12-31T23:59")
-                is_completed: false
-            })
-        });
+        const taskData = {
+            title: title,
+            description: desc,
+            deadline: deadline,
+            is_completed: false 
+        };
 
-        if(res.ok) {
-            closeModal();
-            loadTasks();
-        } else {
-            alert("新增失敗");
+        try {
+            let url = '/tasks/';
+            let method = 'POST';
+
+            // 如果 editingTaskId 有值，代表現在是「編輯模式」
+            if (editingTaskId) {
+                url = `/tasks/${editingTaskId}`; // 改成呼叫 PUT /tasks/{id}
+                method = 'PUT';
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(taskData)
+            });
+
+            if(res.ok) {
+                closeModal();
+                loadTasks(); // 重新載入列表
+            } else {
+                alert("操作失敗");
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            alert("連線錯誤");
         }
     }
 
     // 4. 載入任務列表 (顯示標題、時間、細節)
     async function loadTasks() {
-        const res = await fetch('/tasks/');
-        const tasks = await res.json();
-        const list = document.getElementById('task-list-ul');
-        list.innerHTML = '';
+        try {
+            const res = await fetch('/tasks/');
+            if (!res.ok) return;
 
-        tasks.forEach(task => {
-            const li = document.createElement('li');
-            li.className = 'task-card';
+            // 存到全域變數，讓 editTask 可以查
+            allTasks = await res.json(); 
             
-            // 如果任務是完成的 (is_completed 為 1/true)，加上 CSS class
-            if (task.is_completed) {
-                li.classList.add('task-completed');
-            }
+            const list = document.getElementById('task-list-ul');
+            list.innerHTML = '';
 
-            // 處理時間顯示
-            let timeHtml = '';
-            if(task.deadline) {
-                const dateObj = new Date(task.deadline);
-                timeHtml = `<span style="color:#e67e22; font-weight:bold;">🕒 到期日：${dateObj.toLocaleString()}</span>`;
-            }
+            allTasks.forEach(task => {
+                const li = document.createElement('li');
+                li.className = 'task-card';
+                if (task.is_completed) li.classList.add('task-completed');
 
-            // 按鈕文字：如果已完成顯示 "↩️ 復原"，否則顯示 "✅ 完成"
-            const btnText = task.is_completed ? "↩️ 復原" : "✅ 完成";
+                let timeHtml = '';
+                if(task.deadline) {
+                    const dateObj = new Date(task.deadline);
+                    timeHtml = `<span style="color:#e67e22; font-weight:bold;">🕒 到期日：${dateObj.toLocaleString()}</span>`;
+                }
 
-            li.innerHTML = `
-                <div class="task-header">
-                    <span class="task-title">${task.title}</span>
-                    <div>
-                        <button class="btn-check" onclick="toggleTask(${task.id})">${btnText}</button>
-                        <button class="delete-btn" onclick="deleteTask(${task.id})">刪除</button>
+                const btnText = task.is_completed ? "↩️ 復原" : "✅ 完成";
+
+                li.innerHTML = `
+                    <div class="task-header">
+                        <span class="task-title">${task.title}</span>
+                        <div>
+                            <button class="btn-edit-task" onclick="editTask(${task.id})">✏️ 編輯</button>
+                            
+                            <button class="btn-check" onclick="toggleTask(${task.id})">${btnText}</button>
+                            <button class="delete-btn" onclick="deleteTask(${task.id})">刪除</button>
+                        </div>
                     </div>
-                </div>
-                <div class="task-meta">${timeHtml}</div>
-                <div class="task-desc">${task.description || '(無詳細說明)'}</div>
-            `;
-            list.appendChild(li);
-        });
+                    <div class="task-meta">${timeHtml}</div>
+                    <div class="task-desc">${task.description || '(無詳細說明)'}</div>
+                `;
+                list.appendChild(li);
+            });
+        } catch (error) {
+            console.error("loadTasks error:", error);
+        }
     }
 
     async function toggleTask(taskId) {

@@ -96,3 +96,28 @@ def delete_task(task_id: int, account: str = Depends(get_user)):
             return {"success": False, "message": "刪除失敗，任務不存在或無權限"}
 
     return {"success": True, "message": "任務已刪除"}
+
+# ... (上面是 delete_task) ...
+
+# 4. 修改任務 (編輯)
+@router.put("/{task_id}")
+def update_task(task_id: int, task: TaskModel, account: str = Depends(get_user)):
+    if not account:
+        raise HTTPException(status_code=401, detail="請先登入")
+
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        # 先檢查任務是否存在，且是這個人的
+        cur.execute("SELECT id FROM tasks WHERE id = ? AND account = ?", (task_id, account))
+        if not cur.fetchone():
+             raise HTTPException(status_code=404, detail="任務不存在或無權限")
+
+        # 更新資料
+        cur.execute(
+            """UPDATE tasks 
+               SET title = ?, description = ?, deadline = ? 
+               WHERE id = ? AND account = ?""",
+            (task.title, task.description, task.deadline, task_id, account)
+        )
+        conn.commit()
+    return {"success": True, "message": "任務已更新"}
