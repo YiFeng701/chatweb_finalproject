@@ -165,6 +165,7 @@
     </div>
 
 <script>
+    const input = document.getElementById("msg-input");
     // --- 共用與切換 ---
     function switchTab(tab) {
         document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
@@ -186,7 +187,6 @@
             document.getElementById("chat-list").appendChild(li);
         };
     });
-    
     function send(){
         let input = document.getElementById("msg-input");
         if(ws && input.value.trim()) {
@@ -205,7 +205,16 @@
     // ==========================================
     // --- 任務系統 (Modal 版本) ---
     // ==========================================
-
+    // 定義 loadName 函式
+    function loadName(){
+        fetch("/user/username")
+        .then(res => res.json())
+        .then(data => {
+            // 更新網頁左上角的顯示
+            document.getElementById("username-display").innerText = data.name;
+        })
+        .catch(err => console.error("無法讀取暱稱", err));
+    }
     // 1. 開啟視窗
     function openModal() {
         document.getElementById('taskModal').style.display = 'flex';
@@ -310,6 +319,44 @@
             loadTasks();
         }
     }
+    input.addEventListener("keydown", function(e){
+        if(e.key === "Enter" && !e.shiftKey){
+            e.preventDefault();
+            send();
+        }
+    });
+    // ==========================================
+    // --- 補回：讀取歷史聊天紀錄 ---
+    // ==========================================
+    
+    async function loadChatHistory() {
+        try {
+            // 呼叫後端 API 拿取最近 50 筆資料
+            const res = await fetch("/messages");
+            const messages = await res.json();
+            
+            const list = document.getElementById("chat-list");
+            list.innerHTML = ""; // 先清空，避免重複顯示
+
+            messages.forEach(msg => {
+                const li = document.createElement("li");
+                // 格式： 名字: 內容
+                li.innerText = `${msg.name}: ${msg.content}`;
+                list.appendChild(li);
+            });
+
+            // 讀取完後，自動捲動到最底部（看最新訊息）
+            list.scrollTop = list.scrollHeight;
+            
+        } catch (error) {
+            console.error("讀取歷史訊息失敗:", error);
+        }
+    }
+
+    loadName();        // 載入使用者暱稱
+    loadChatHistory();
+
+    loadTasks();       // 載入任務清單
 </script>
 </body>
 </html>
