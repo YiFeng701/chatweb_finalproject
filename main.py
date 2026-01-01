@@ -10,7 +10,7 @@ import json
 # 請確保同一層目錄下有 dependencies.py
 from dependencies import create_access_token, create_refresh_token, verify_token, get_user
 # 請確保有 routers 資料夾，裡面有 tasks.py
-from routers import tasks 
+from routers import tasks, bounty
 
 # 定義 Request 模型 (這些只在 main 用到，所以留著)
 class LoginRequest(BaseModel):
@@ -86,6 +86,19 @@ CREATE TABLE IF NOT EXISTS tasks(
     is_completed BOOLEAN DEFAULT 0
 )
 """)
+# 4. Bounty 表 (懸賞任務:大家都可以接取)
+first_cur.execute("""
+CREATE TABLE IF NOT EXISTS bounty(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT,                 --發任務的人
+    taker TEXT,                 --接任務的人
+    title TEXT,
+    description TEXT,
+    reward INTEGER,             --報酬
+    status TEXT DEFAULT 'open', --open / take / finish / cancel
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""")
 
 first_conn.commit()
 first_conn.close()
@@ -98,6 +111,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # **關鍵步驟：掛載任務系統的 Router**
 app.include_router(tasks.router)
+app.include_router(bounty.router)
 
 
 # --- 原本的路由與邏輯 ---

@@ -127,6 +127,7 @@
         </div>
         <button class="nav-btn active" onclick="switchTab('chat')">💬 聊天室</button>
         <button class="nav-btn" onclick="switchTab('task')">📋 我的任務</button>
+        <button class="nav-btn" onclick="switchTab('bounty')">💰 懸賞任務</button>
     </div>
 
     <div id="main-content">
@@ -145,6 +146,15 @@
                     <button class="add-btn" onclick="openModal()">+ 新增任務</button>
                 </div>
                 <ul id="task-list-ul"></ul>
+            </div>
+        </div>
+
+        <div id="section-bounty" class="page-section">
+            <div id="task-container">
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <button class="add-btn" onclick="openBountyModal()">+ 發布懸賞</button>
+                </div>
+                <ul id="bounty-list-ul"></ul>
             </div>
         </div>
     </div>
@@ -175,6 +185,32 @@
         </div>
     </div>
 
+    <div id="bountyModal" class="modal">
+        <div class="modal-content">
+            <h3>發布懸賞任務</h3>
+            
+            <div class="form-group">
+                <label>標題</label>
+                <input type="text" id="b-title" placeholder="例如：完成報告">
+            </div>
+            
+            <div class="form-group">
+                <label>細節說明</label>
+                <textarea id="b-desc" rows="3" placeholder="輸入更多細節..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>懸賞金額</label>
+                <input type="number" id="b-reward">
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeBountyModal()">取消</button>
+                <button class="btn-save" onclick="submitBounty()">儲存</button>
+            </div>
+        </div>
+    </div>
+
 <script>
     const input = document.getElementById("msg-input");
     // --- 共用與切換 ---
@@ -182,11 +218,11 @@
         document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
         document.getElementById(`section-${tab}`).classList.add('active');
-        if(tab === 'chat') document.querySelectorAll('.nav-btn')[0].classList.add('active');
-        else {
-            document.querySelectorAll('.nav-btn')[1].classList.add('active');
-            loadTasks();
-        }
+        const btnMap = {chat : 0, task : 1, bounty : 2}
+        document.querySelectorAll('.nav-btn')[btnMap[tab]].classList.add('active');
+        
+        if(tab == 'task')  loadTasks();
+        if(tab == 'bounty')  loadBounties();
     }
 
     // --- 聊天室 ---
@@ -220,6 +256,7 @@
     // 定義 loadName 函式
     let allTasks = [];       // 用來暫存所有任務資料
     let editingTaskId = null; // 用來記錄現在正在編輯哪一個任務 (null 代表是新增模式)
+    let editingBountyId = null;
     function loadName(){
         fetch("/user/username")
         .then(res => res.json())
@@ -415,9 +452,114 @@
         }
     }
 
+    // ==========================================
+    // --- 懸賞系統 (Modal 版本) ---
+    // ==========================================
+    // 載入懸賞
+    async function loadBounties() {
+        try{
+            const res = await fetch("/bounty/open")
+            if(!res.ok) return;
+
+            const bounties = await res.json();
+            const ul = document.getElementById("bounty-list-ul")
+            ul.innerHTML = "";
+
+            bounties.forEach(bou => {
+                const li = document.createElement("li")
+                li.className = "task-card";
+
+                li.innerHTML = `
+                    <div class="task-header">
+                        <span class="task-title">${bou.title}</span>
+                        <span style="color:#e74c3c;">💰 ${bou.reward}</span>
+                    </div>
+                    
+                    <div class="task-meta">發布者 : ${bou.owner_name}</div>
+                    <div class="task-desc">${bou.description || '(無詳細說明)'}</div>
+                    <button class="btn-check" onclick="takeBounty(${bou.id})">接取任務</button>
+                `;
+                ul.appendChild(li);
+            })
+        }catch(err){
+                console.error(err);
+        }
+    }
+
+    // 接取任務
+    async function takeBounty(id) {
+        if(!confirm("確定要接取這個懸賞任務?"))  return;
+
+        const res = await fetch(`bounty/${id}/take`, { method : "POST" });
+        if(res.ok){
+            alert("成功接取任務");
+            loadBounties();
+        }else{
+            alert("接取失敗")
+        }
+    }
+
+    // 1. 開啟視窗
+    function openBountyModal(isEditMode = false) {
+        const modal = document.getElementById('bountyModal');
+        const titleLabel = document.querySelector('#bountyModal h3');
+
+        modal.style.display = 'flex';
+
+        if (!isEditMode) {
+            // --- 新增模式 ---
+            editingBountyId = null; // 清空編輯 ID
+            titleLabel.innerText = "發布懸賞任務";
+            // 清空輸入框
+            document.getElementById('b-title').value = "";
+            document.getElementById('b-desc').value = "";
+            document.getElementById('b-reward').value = "";
+        }
+    }
+    
+    function closeBountyModal(){
+        document.getElementById("bountyModal").style.display = "none";
+    }
+
+    async function submitBounty(){
+        const title = document.getElementById('b-title').value.trim();
+        const desc  = document.getElementById('b-desc').value.trim();
+        const rewardVal = document.getElementById('b-reward').value;
+
+        const reward = parseInt(rewardVal);
+
+        if (!title) {
+            alert("請輸入標題");
+            return;
+        }
+
+        if (isNaN(reward) || reward <= 0) {
+            alert("請輸入正確的懸賞金額");
+            return;
+        }
+
+        const data = {
+            title: title,
+            description: desc,
+            reward: reward
+        };
+        const res = await fetch("/bounty/", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(data)
+        });
+        if(res.ok){
+            closeBountyModal();
+            loadBounties();
+        }else{
+            const t = await res.text();
+            console.error("發布失敗:", t);
+            alert("發布失敗");
+        }
+    }
+
     loadName();        // 載入使用者暱稱
     loadChatHistory();
-
     loadTasks();       // 載入任務清單
 </script>
 </body>
