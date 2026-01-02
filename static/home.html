@@ -618,6 +618,7 @@
 <script>
     const input = document.getElementById("msg-input");
     let allTasks = [];
+    let allBounties = [];
     let editingTaskId = null;
     let editingBountyId = null;
     let ws = null;
@@ -922,12 +923,22 @@
     }
 
     // --- 懸賞系統 ---
-    function openBountyModal() {
+    function openBountyModal(isEditMode = false) {
         document.getElementById('bountyModal').style.display = 'flex';
+        const titleLabel = document.querySelector('#bountyModal h3');
+
+        if (!isEditMode) {
+            editingBountyId = null;
+            titleLabel.innerText = "新增懸賞任務";
+            document.getElementById('b-title').value = "";
+            document.getElementById('b-desc').value = "";
+            document.getElementById('b-deadline').value = "";
+        }
     }
     
     function closeBountyModal(){
         document.getElementById("bountyModal").style.display = "none";
+        editingBountyId = null;
     }
 
     async function submitBounty(){
@@ -952,20 +963,34 @@
             reward: reward
         };
         
-        const res = await fetch("/bounty/", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify(data)
-        });
-        
-        if(res.ok){
-            closeBountyModal();
-            loadBounties();
-        }else{
-            const t = await res.text();
-            console.error("發布失敗:", t);
-            alert("發布失敗");
-        }
+        try{
+            let url = '/bounty';
+            let method = 'POST';
+
+            if(editingBountyId){
+                url = `/bounty/${editingBountyId}`;
+                method = 'PUT';
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers:{"Content-Type":"application/json"},
+                credentials: 'include',
+                body:JSON.stringify(data)
+            });
+            
+            if(res.ok){
+                closeBountyModal();
+                loadBounties();
+            }else{
+                const t = await res.text();
+                console.error("發布失敗:", t);
+                alert("發布失敗");
+            }
+        }catch(err){
+            console.error("懸賞任務 : ", err);
+            alert("連線錯誤");
+        }   
     }
 
     async function loadBounties() {
@@ -973,18 +998,24 @@
             const res = await fetch("/bounty/open")
             if(!res.ok) return;
 
-            const bounties = await res.json();
+            allBounties = await res.json();
             const ul = document.getElementById("bounty-list-ul")
             ul.innerHTML = "";
 
-            bounties.forEach(bou => {
+            allBounties.forEach(bou => {
                 const li = document.createElement("li")
                 li.className = "task-card";
+                if (bou.status == 'finish')  li.classList.add('task-completed');
+                const btnText = bou.status == 'finish' ? "↩️ 復原" : "✅ 完成";
 
                 li.innerHTML = `
                     <div class="task-header">
                         <span class="task-title">${bou.title}</span>
                         <span style="color:#e74c3c;">💰 ${bou.reward}</span>
+                        <div>
+                            <button class="btn-edit-task" onclick="editBounty(${bou.id})">✏️ 編輯</button>
+                            <button class="delete-btn" onclick="deleteBounty(${bou.id})">刪除</button>
+                        </div>
                     </div>
                     
                     <div class="task-meta">發布者 : ${bou.owner_name}</div>
@@ -995,6 +1026,34 @@
             })
         }catch(err){
             console.error(err);
+        }
+    }
+
+    function editBounty(id) {
+        const bounty = allBounties.find(b => b.id === id);
+        if (!bounty) return;
+
+        editingBountyId = id;
+        document.querySelector('#bountyModal h3').innerText = "編輯懸賞任務";
+        document.getElementById('b-title').value = bounty.title;
+        document.getElementById('b-desc').value = bounty.description || "";
+        document.getElementById('b-reward').value = bounty.reward || "";
+        openBountyModal(true);
+    }
+
+    async function deleteBounty(id) {
+        if(confirm("確定刪除?")) {
+             const res = await fetch(`/bounty/${id}`, {
+                method:'DELETE',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                loadBounties();
+            } else {
+                const t = await res.text();
+                console.error("刪除失敗:", t);
+                alert("刪除失敗");
+            }
         }
     }
 
@@ -1530,12 +1589,6 @@
         });
     }
 
-    // 修改現有的 WebSocket 初始化部分
-    // 在頁面加載時初始化 WebSocket
-    window.addEventListener('load', function() {
-        initWebSocket();
-        initializeFriendSystem();
-    });
 </script>
 </body>
 </html>

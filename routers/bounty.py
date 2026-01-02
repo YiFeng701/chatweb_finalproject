@@ -6,7 +6,7 @@ from typing import Optional
 
 router = APIRouter(
     prefix="/bounty",
-    tags={"懸賞任務"}
+    tags=["懸賞任務"]
 )
 
 class Bounty(BaseModel):
@@ -104,3 +104,44 @@ def get_my_bounty(account: str = Depends(get_user)):
         """, (account, ))
         rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+# 6. 刪除任務
+@router.delete("/{id}")
+def delete_task(id: int, account: str = Depends(get_user)):
+    if not account:
+        raise HTTPException(status_code=401, detail="請先登入")
+
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        # 重要：這裡加了 AND account = ? 是為了安全！
+        # 確保你只能刪除「你自己」的任務，不能刪別人的
+        cur.execute(
+            "DELETE FROM bounty WHERE id = ? AND owner = ?", 
+            (id, account)
+        )
+        conn.commit()
+        
+        # 檢查有沒有真的刪除到資料 (若 rowcount 為 0 表示找不到該 ID 或是該 ID 不屬於你)
+        if cur.rowcount == 0:
+            return {"success": False, "message": "刪除失敗，任務不存在或無權限"}
+
+    return {"success": True, "message": "任務已刪除"}
+
+# 7. 修改任務 (編輯)
+@router.put("/{id}")
+def update_task(id: int, bounty: Bounty, account: str = Depends(get_user)):
+    if not account:
+        raise HTTPException(status_code=401, detail="請先登入")
+
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        # 先檢查任務是否存在，且是這個人的
+        cur.execute("SELECT id FROM bounty WHERE id = ? AND owner = ?", (id, account))
+        if not cur.fetchone():
+             raise HTTPException(status_code=404, detail="任務不存在或無權限")
+
+        # 更新資料
+        cur.execute("UPDATE bounty SET title = ?, description = ?, reward = ? WHERE id = ? AND owner = ?",
+            (bounty.title, bounty.description, bounty.reward, id, account))
+        conn.commit()
+    return {"success": True, "message": "任務已更新"}
