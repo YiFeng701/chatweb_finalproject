@@ -610,7 +610,7 @@
         </div>
         <div id="private-chat-messages" class="chat-messages"></div>
         <div class="chat-input">
-            <input type="text" id="private-msg-input" placeholder="輸入私訊..." onkeydown="if(event.key==='Enter') sendPrivateMessage()">
+            <input type="text" id="private-msg-input" placeholder="輸入私訊...">
             <button onclick="sendPrivateMessage()" style="margin-left: 5px; padding: 5px 10px; background: #1abc9c; color: white; border: none; border-radius: 4px; cursor: pointer;">送出</button>
         </div>
     </div>
@@ -641,7 +641,7 @@
     }
 
     // --- 使用者名稱相關 ---
-    // 在現有程式碼中找到 loadName 函數，修改為：
+    // loadName 函數：
     function loadName(){
         fetch("/user/username")
         .then(res => {
@@ -665,6 +665,7 @@
     window.addEventListener('load', function() {
         loadName();
         initWebSocket();
+        loadChatHistory(); // 載入舊資料
         initializeFriendSystem();
     });
 
@@ -680,58 +681,56 @@
     //--------------------------------------
     // --- WebSocket 聊天室 ---
     function initWebSocket() {
-    fetch("/refresh", { 
-        method: "POST",
-        credentials: "include"
-    })
-    .then(res => {
-        if (!res.ok) {
-            window.location.href = "/";
-            throw new Error("Token refresh failed");
-        }
-        return res.json();
-    })
-    .then(data => {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/chat?token=${data.access_token}`;
-        
-        ws = new WebSocket(wsUrl);
-        
-        ws.onopen = () => {
-            console.log('WebSocket connected');
-            // 連接成功後載入歷史訊息
-            loadChatHistory();
-        };
-        
-        ws.onmessage = (e) => {
-            const data = e.data;
+        fetch("/refresh", { 
+            method: "POST",
+            credentials: "include"
+        })
+        .then(res => {
+            if (!res.ok) {
+                window.location.href = "/";
+                throw new Error("Token refresh failed");
+            }
+            return res.json();
+        })
+        .then(data => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/chat?token=${data.access_token}`;
             
-            try {
-                const msg = JSON.parse(data);
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (e) => {
+                const data = e.data;
                 
-                // 檢查是否是私訊格式
-                if (msg.type === 'private') {
-                    showNotification(`${msg.sender}: ${msg.content}`);
+                try {
+                    const msg = JSON.parse(data);
                     
-                    // 如果當前正在與該用戶聊天，則顯示訊息
-                    if (currentChatWith === msg.sender_account) {
-                        loadPrivateMessages(currentChatWith);
+                    // 檢查是否是私訊格式
+                    if (msg.type === 'private') {
+                        showNotification(`${msg.sender}: ${msg.content}`);
+                        
+                        // 如果當前正在與該用戶聊天，則顯示訊息
+                        if (currentChatWith === msg.sender_account) {
+                            loadPrivateMessages(currentChatWith);
+                        }
+                    } else {
+                        // 普通聊天室訊息
+                        let li = document.createElement("li");
+                        li.innerText = data;
+                        document.getElementById("chat-list").appendChild(li);
+                        document.getElementById("chat-list").scrollTop = document.getElementById("chat-list").scrollHeight;
                     }
-                } else {
-                    // 普通聊天室訊息
+                } catch {
+                    // 如果不是 JSON，就是普通訊息
                     let li = document.createElement("li");
                     li.innerText = data;
                     document.getElementById("chat-list").appendChild(li);
                     document.getElementById("chat-list").scrollTop = document.getElementById("chat-list").scrollHeight;
                 }
-            } catch {
-                // 如果不是 JSON，就是普通訊息
-                let li = document.createElement("li");
-                li.innerText = data;
-                document.getElementById("chat-list").appendChild(li);
-                document.getElementById("chat-list").scrollTop = document.getElementById("chat-list").scrollHeight;
-            }
-        };
+            };
             
             ws.onerror = (error) => {
                 console.error('WebSocket 錯誤:', error);
@@ -1013,44 +1012,44 @@
 
     // --- 歷史聊天紀錄 ---
     async function loadChatHistory() {
-    try {
-        console.log("正在載入歷史訊息...");
-        const res = await fetch("/messages");
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-        }
-        const messages = await res.json();
-        
-        console.log("收到歷史訊息:", messages.length, "條");
-        
-        const list = document.getElementById("chat-list");
-        if (!list) {
-            console.error("找不到聊天列表元素");
-            return;
-        }
-        
-        list.innerHTML = ""; // 先清空，避免重複顯示
+        try {
+            console.log("正在載入歷史訊息...");
+            const res = await fetch("/messages");
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const messages = await res.json();
+            
+            console.log("收到歷史訊息:", messages.length, "條");
+            
+            const list = document.getElementById("chat-list");
+            if (!list) {
+                console.error("找不到聊天列表元素");
+                return;
+            }
+            
+            list.innerHTML = ""; // 先清空，避免重複顯示
 
-        messages.forEach(msg => {
-            const li = document.createElement("li");
-            // 格式： 名字: 內容 (時間)
-            const time = new Date(msg.created_at).toLocaleTimeString();
-            li.innerText = `${msg.name} [${time}]: ${msg.content}`;
-            list.appendChild(li);
-        });
+            messages.forEach(msg => {
+                const li = document.createElement("li");
+                // 格式： 名字: 內容 (時間)
+                const time = new Date(msg.created_at).toLocaleTimeString();
+                li.innerText = `${msg.name} [${time}]: ${msg.content}`;
+                list.appendChild(li);
+            });
 
-        // 讀取完後，自動捲動到最底部（看最新訊息）
-        list.scrollTop = list.scrollHeight;
-        console.log("歷史訊息載入完成");
-        
-    } catch (error) {
-        console.error("讀取歷史訊息失敗:", error);
-        const list = document.getElementById("chat-list");
-        if (list) {
-            list.innerHTML = `<li style="color: red;">無法載入歷史訊息: ${error.message}</li>`;
+            // 讀取完後，自動捲動到最底部（看最新訊息）
+            list.scrollTop = list.scrollHeight;
+            console.log("歷史訊息載入完成");
+            
+        } catch (error) {
+            console.error("讀取歷史訊息失敗:", error);
+            const list = document.getElementById("chat-list");
+            if (list) {
+                list.innerHTML = `<li style="color: red;">無法載入歷史訊息: ${error.message}</li>`;
+            }
         }
     }
-}
 
     // ==========================================
     // --- 好友系統 ---
