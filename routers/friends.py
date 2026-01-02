@@ -297,7 +297,7 @@ def get_recent_conversations(account: str = Depends(get_user)):
             SELECT 
                 other_account,
                 u.name as other_name,
-                last_message,
+                pm.content as last_message,
                 last_time,
                 unread_count
             FROM (
@@ -307,15 +307,21 @@ def get_recent_conversations(account: str = Depends(get_user)):
                         ELSE sender_account
                     END as other_account,
                     MAX(created_at) as last_time,
-                    MAX(CASE WHEN created_at = MAX(created_at) THEN content END) as last_message,
                     SUM(CASE WHEN receiver_account = ? AND is_read = 0 THEN 1 ELSE 0 END) as unread_count
                 FROM private_messages
                 WHERE sender_account = ? OR receiver_account = ?
                 GROUP BY other_account
-            ) recent
-            JOIN users u ON recent.other_account = u.account
-            ORDER BY last_time DESC
-        """, (account, account, account, account))
+            ) r
+            JOIN private_messages pm
+                ON (
+                    (pm.sender_account = r.other_account AND pm.receiver_account = ?)
+                    OR
+                    (pm.sender_account = ? AND pm.receiver_account = r.other_account)
+                )
+                AND pm.created_at = r.last_time
+            JOIN users u ON r.other_account = u.account
+            ORDER BY r.last_time DESC
+        """, (account, account, account, account, account, account))
         
         rows = cur.fetchall()
     
