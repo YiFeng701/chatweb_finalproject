@@ -1032,9 +1032,8 @@
 
             messages.forEach(msg => {
                 const li = document.createElement("li");
-                // 格式： 名字: 內容 (時間)
-                const time = new Date(msg.created_at).toLocaleTimeString();
-                li.innerText = `${msg.name} [${time}]: ${msg.content}`;
+                // 格式： 名字: 內容
+                li.innerText = `${msg.name} : ${msg.content}`;
                 list.appendChild(li);
             });
 
