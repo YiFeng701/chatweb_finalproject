@@ -485,7 +485,7 @@
         <div id="section-task" class="page-section">
             <div id="task-container">
                 <div style="text-align: right; margin-bottom: 10px;">
-                    <button class="add-btn" onclick="openModal()">+ 新增任務</button>
+                    <button class="add-btn" onclick="openModal(1)">+ 新增任務</button>
                 </div>
                 <ul id="task-list-ul"></ul>
             </div>
@@ -494,7 +494,7 @@
         <div id="section-bounty" class="page-section">
             <div id="task-container">
                 <div style="text-align: right; margin-bottom: 10px;">
-                    <button class="add-btn" onclick="openBountyModal()">+ 發布懸賞</button>
+                    <button class="add-btn" onclick="openModal(2)">+ 發布懸賞</button>
                 </div>
                 <ul id="bounty-list-ul"></ul>
             </div>
@@ -547,8 +547,8 @@
             </div>
 
             <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeModal()">取消</button>
-                <button class="btn-save" onclick="submitTask()">儲存</button>
+                <button class="btn-cancel" onclick="closeModal(1)">取消</button>
+                <button class="btn-save" onclick="submitTask(1)">儲存</button>
             </div>
         </div>
     </div>
@@ -574,8 +574,8 @@
             </div>
 
             <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeBountyModal()">取消</button>
-                <button class="btn-save" onclick="submitBounty()">儲存</button>
+                <button class="btn-cancel" onclick="closeModal(2)">取消</button>
+                <button class="btn-save" onclick="submitTask(2)">儲存</button>
             </div>
         </div>
     </div>
@@ -786,70 +786,120 @@
         }
     });
 
-    // --- 任務系統 ---
-    function openModal(isEditMode = false) {
-        const modal = document.getElementById('taskModal');
-        const titleLabel = document.querySelector('#taskModal h3');
+    // --- 任務系統 ---   model : task=1, bounty=2
+    function openModal(model, isEditMode = false) {
+        let modal, titleLabel, modal_text, modal_title, modal_desc, modal_last;
+
+        if(model == 1){
+            modal = document.getElementById('taskModal');
+        }else if(model == 2){
+            modal = document.getElementById('bountyModal');
+        }
         modal.style.display = 'flex';
 
         if (!isEditMode) {
-            editingTaskId = null;
-            titleLabel.innerText = "新增待辦事項";
-            document.getElementById('m-title').value = "";
-            document.getElementById('m-desc').value = "";
-            document.getElementById('m-deadline').value = "";
+            if(model == 1){
+                editingTaskId = null;
+                titleLabel.innerText = "新增待辦事項";
+                document.getElementById('m-title').value = "";
+                document.getElementById('m-desc').value = "";
+                document.getElementById('m-deadline').value = "";
+            }else if(model == 2){
+                editingBountyId = null;
+                titleLabel.innerText = "新增懸賞任務";
+                document.getElementById('b-title').value = "";
+                document.getElementById('b-desc').value = "";
+                document.getElementById('b-reward').value = "";
+            }
         }
     }
 
-    function editTask(id) {
-        const task = allTasks.find(t => t.id === id);
-        if (!task) return;
-
-        editingTaskId = id;
-        document.querySelector('#taskModal h3').innerText = "編輯待辦事項";
-        document.getElementById('m-title').value = task.title;
-        document.getElementById('m-desc').value = task.description || "";
-        document.getElementById('m-deadline').value = task.deadline || "";
-        openModal(true);
+    function editTask(model, id) {
+        if(model == 1){
+            const task = allTasks.find(t => t.id === id);
+            if(!task) return;
+            editingTaskId = id;
+            document.querySelector('#taskModal h3').innerText = "編輯待辦事項";
+            document.getElementById('m-title').value = task.title;
+            document.getElementById('m-desc').value = task.description || "";
+            document.getElementById('m-deadline').value = task.deadline || "";
+        }else if(model == 2){
+            const task = allBounties.find(t => t.id === id);
+            if(!task) return;
+            editingBountyId = id;
+            document.querySelector('#bountyModal h3').innerText = "編輯懸賞任務";
+            document.getElementById('b-title').value = bounty.title;
+            document.getElementById('b-desc').value = bounty.description || "";
+            document.getElementById('b-reward').value = bounty.reward || "";
+        }
+        openModal(model,true);
     }
 
-    function closeModal() {
-        document.getElementById('taskModal').style.display = 'none';
-        editingTaskId = null;
+    function closeModal(model) {
+        if(model == 1){
+            document.getElementById('taskModal').style.display = 'none';
+            editingTaskId = null;
+        }else if(model == 2){
+            document.getElementById("bountyModal").style.display = "none";
+            editingBountyId = null;
+        }
     }
 
-    async function submitTask() {
-        const title = document.getElementById('m-title').value.trim();
-        const desc = document.getElementById('m-desc').value.trim();
-        const deadline = document.getElementById('m-deadline').value;
+    async function submitTask(model){
+        let title, desc, last;
+
+        if(model == 1){
+            title = document.getElementById('m-title').value.trim();
+            desc = document.getElementById('m-desc').value.trim();
+            last = document.getElementById('m-deadline').value;
+        }else if(model == 2){
+            title = document.getElementById('b-title').value.trim();
+            desc  = document.getElementById('b-desc').value.trim();
+            reward = document.getElementById('b-reward').value;
+            last = parseInt(reward);
+            if (isNaN(last) || last <= 0) {
+                alert("請輸入正確的懸賞金額");
+                return;
+            }
+        }
 
         if(!title) return alert("請至少輸入標題");
 
         const taskData = {
             title: title,
-            description: desc,
-            deadline: deadline,
-            is_completed: false 
+            description: desc
         };
+        if(model == 1){
+            taskData.deadline = last;
+            taskData.is_completed = false;
+        }else if(model == 2){
+            taskData.reward = last;
+        }
 
         try {
-            let url = '/tasks/';
-            let method = 'POST';
+            let url, method = 'POST';
+            if(model == 1)  url = '/tasks/';
+            else if(model == 2)  url = '/bounty';
 
-            if (editingTaskId) {
+            if (model == 1 && editingTaskId) {
                 url = `/tasks/${editingTaskId}`;
+                method = 'PUT';
+            }else if(model == 2 && editingBountyId){
+                url = `/bounty/${editingBountyId}`;
                 method = 'PUT';
             }
 
             const res = await fetch(url, {
                 method: method,
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(taskData)
+                headers:{"Content-Type":"application/json"},
+                credentials: 'include',
+                body:JSON.stringify(taskData)
             });
 
             if(res.ok) {
-                closeModal();
-                loadTasks();
+                closeModal(model);
+                if(model == 1)  loadTasks();
+                else if(model == 2)  loadBounties();
             } else {
                 alert("操作失敗");
             }
@@ -886,9 +936,9 @@
                     <div class="task-header">
                         <span class="task-title">${task.title}</span>
                         <div>
-                            <button class="btn-edit-task" onclick="editTask(${task.id})">✏️ 編輯</button>
+                            <button class="btn-edit-task" onclick="editTask(1, ${task.id})">✏️ 編輯</button>
                             <button class="btn-check" onclick="toggleTask(${task.id})">${btnText}</button>
-                            <button class="delete-btn" onclick="deleteTask(${task.id})">刪除</button>
+                            <button class="delete-btn" onclick="deleteTask(1, ${task.id})">刪除</button>
                         </div>
                     </div>
                     <div class="task-meta">${timeHtml}</div>
@@ -915,84 +965,22 @@
         }
     }
     
-    async function deleteTask(id) {
+    async function deleteTask(model, id) {
         if(confirm("確定刪除?")) {
-            await fetch(`/tasks/${id}`, {method:'DELETE'});
-            loadTasks();
+            if(model == 1){
+                await fetch(`/tasks/${id}`, {method:'DELETE'});
+                loadTasks();
+            }else if(model == 2){
+                await fetch(`/bounty/${id}`, {
+                    method:'DELETE',
+                    credentials: 'include'
+                });
+                loadBounties();
+            }
         }
     }
 
     // --- 懸賞系統 ---
-    function openBountyModal(isEditMode = false) {
-        document.getElementById('bountyModal').style.display = 'flex';
-        const titleLabel = document.querySelector('#bountyModal h3');
-
-        if (!isEditMode) {
-            editingBountyId = null;
-            titleLabel.innerText = "新增懸賞任務";
-            document.getElementById('b-title').value = "";
-            document.getElementById('b-desc').value = "";
-            document.getElementById('b-deadline').value = "";
-        }
-    }
-    
-    function closeBountyModal(){
-        document.getElementById("bountyModal").style.display = "none";
-        editingBountyId = null;
-    }
-
-    async function submitBounty(){
-        const title = document.getElementById('b-title').value.trim();
-        const desc  = document.getElementById('b-desc').value.trim();
-        const rewardVal = document.getElementById('b-reward').value;
-        const reward = parseInt(rewardVal);
-
-        if (!title) {
-            alert("請輸入標題");
-            return;
-        }
-
-        if (isNaN(reward) || reward <= 0) {
-            alert("請輸入正確的懸賞金額");
-            return;
-        }
-
-        const data = {
-            title: title,
-            description: desc,
-            reward: reward
-        };
-        
-        try{
-            let url = '/bounty';
-            let method = 'POST';
-
-            if(editingBountyId){
-                url = `/bounty/${editingBountyId}`;
-                method = 'PUT';
-            }
-
-            const res = await fetch(url, {
-                method: method,
-                headers:{"Content-Type":"application/json"},
-                credentials: 'include',
-                body:JSON.stringify(data)
-            });
-            
-            if(res.ok){
-                closeBountyModal();
-                loadBounties();
-            }else{
-                const t = await res.text();
-                console.error("發布失敗:", t);
-                alert("發布失敗");
-            }
-        }catch(err){
-            console.error("懸賞任務 : ", err);
-            alert("連線錯誤");
-        }   
-    }
-
     async function loadBounties() {
         try{
             const res = await fetch("/bounty/open")
@@ -1013,8 +1001,8 @@
                         <span class="task-title">${bou.title}</span>
                         <span style="color:#e74c3c;">💰 ${bou.reward}</span>
                         <div>
-                            <button class="btn-edit-task" onclick="editBounty(${bou.id})">✏️ 編輯</button>
-                            <button class="delete-btn" onclick="deleteBounty(${bou.id})">刪除</button>
+                            <button class="btn-edit-task" onclick="editTask(2, ${bou.id})">✏️ 編輯</button>
+                            <button class="delete-btn" onclick="deleteTask(2, ${bou.id})">刪除</button>
                         </div>
                     </div>
                     
@@ -1026,34 +1014,6 @@
             })
         }catch(err){
             console.error(err);
-        }
-    }
-
-    function editBounty(id) {
-        const bounty = allBounties.find(b => b.id === id);
-        if (!bounty) return;
-
-        editingBountyId = id;
-        document.querySelector('#bountyModal h3').innerText = "編輯懸賞任務";
-        document.getElementById('b-title').value = bounty.title;
-        document.getElementById('b-desc').value = bounty.description || "";
-        document.getElementById('b-reward').value = bounty.reward || "";
-        openBountyModal(true);
-    }
-
-    async function deleteBounty(id) {
-        if(confirm("確定刪除?")) {
-             const res = await fetch(`/bounty/${id}`, {
-                method:'DELETE',
-                credentials: 'include'
-            });
-            if (res.ok) {
-                loadBounties();
-            } else {
-                const t = await res.text();
-                console.error("刪除失敗:", t);
-                alert("刪除失敗");
-            }
         }
     }
 
