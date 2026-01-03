@@ -14,7 +14,7 @@ import uuid
 # 從 dependencies.py 導入 JWT 相關函式 請確保同一層目錄下有 dependencies.py
 from dependencies import create_access_token, create_refresh_token, verify_token, get_user
 # 從 routers 資料夾導入任務和懸賞系統 確保有 routers 資料夾，裡面有 tasks.py
-from routers import tasks, bounty
+from routers import tasks, bounty, memo
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -141,7 +141,18 @@ CREATE TABLE IF NOT EXISTS private_messages(
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-
+#7.  memos表
+first_cur.execute("""
+CREATE TABLE IF NOT EXISTS memos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT,
+    deadline TEXT,                   
+    is_completed BOOLEAN DEFAULT 0,  
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+""")
 first_conn.commit()
 first_conn.close()
 
@@ -155,6 +166,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(tasks.router)
 app.include_router(bounty.router)
 app.include_router(friends.router)
+app.include_router(memo.router)
 
 # --- 原本的路由與邏輯 ---
 # 登入畫面

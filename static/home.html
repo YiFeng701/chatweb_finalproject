@@ -653,6 +653,7 @@
         <div class="nav-buttons">
             <button class="nav-btn active" onclick="switchTab('chat')">💬 聊天室</button>
             <button class="nav-btn" onclick="switchTab('task')">📋 我的任務</button>
+            <button class="nav-btn" onclick="switchTab('memo')">📝 備忘錄</button>
             <button class="nav-btn" onclick="switchTab('bounty')">💰 懸賞任務</button>
             <button class="nav-btn" onclick="switchTab('friends')">👥 好友與私訊</button>
         </div>
@@ -679,6 +680,17 @@
                 </ul>
             </div>
         </div>
+
+        <!-- 備忘錄頁面 -->
+        <div id="section-memo" class="page-section">
+            <div id="task-container">
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <button class="add-btn" onclick="openModal(3)">+ 新增備忘錄</button>
+                </div>
+                <ul id="memo-list-ul"></ul>
+            </div>
+        </div>
+
 
         <!-- 任務頁面 -->
         <div id="section-task" class="page-section">
@@ -726,7 +738,32 @@
             </div>
         </div>
     </div>
+    <!-- 新增備忘錄 Modal -->
+    <div id="memoModal" class="modal">
+        <div class="modal-content">
+            <h3>新增備忘錄</h3>
+            
+            <div class="form-group">
+                <label>標題</label>
+                <input type="text" id="memo-title" placeholder="備忘錄標題">
+            </div>
+            
+            <div class="form-group">
+                <label>內容</label>
+                <textarea id="memo-content" rows="3" placeholder="輸入內容..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>提醒時間 (選填)</label>
+                <input type="datetime-local" id="memo-deadline">
+            </div>
 
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeModal(3)">取消</button>
+                <button class="btn-save" onclick="submitTask(3)">儲存</button>
+            </div>
+        </div>
+    </div>
     <!-- 新增任務 Modal -->
     <div id="taskModal" class="modal">
         <div class="modal-content">
@@ -820,11 +857,13 @@
     const input = document.getElementById("msg-input");
     let allTasks = [];
     let allBounties = [];
+    let allMemos = [];
     let editingTaskId = null;
     let editingBountyId = null;
     let ws = null;
     let currentChatWith = null;
     let messageCheckInterval = null;
+    let editingMemoId = null;
 
     // --- 共用與切換 ---
     function switchTab(tab){
@@ -845,7 +884,7 @@
         }
         
         // 設定按鈕活動狀態
-        const btnMap = {chat: 0, task: 1, bounty: 2, friends: 3};
+        const btnMap = {chat: 0, task: 1, bounty: 3, friends: 4,memo: 2};
         const navButtons = document.querySelectorAll('.nav-btn');
         if(navButtons[btnMap[tab]]){
             navButtons[btnMap[tab]].classList.add('active');
@@ -856,6 +895,8 @@
             loadTasks(1);
         }else if(tab === 'bounty'){
             loadTasks(2);
+        }else if(tab === 'memo'){
+            loadTasks(3)
         }else if(tab === 'friends'){
             loadFriends();
             loadFriendRequests();
@@ -1023,6 +1064,8 @@
             modal = document.getElementById('taskModal');
         }else if(model == 2){
             modal = document.getElementById('bountyModal');
+        }else if(model == 3){
+            modal = document.getElementById('memoModal');
         }
         modal.style.display = 'flex';
 
@@ -1039,6 +1082,12 @@
                 document.getElementById('b-title').value = "";
                 document.getElementById('b-desc').value = "";
                 document.getElementById('b-reward').value = "";
+            }else if(model == 3){
+                editingMemoId = null;
+                document.querySelector('#memoModel h3').innerText = "新增備忘錄";
+                document.getElementById('memo-title').value = "";
+                document.getElementById('memo-content').value = "";
+                document.getElementById('memo-deadline').value = "";
             }
         }
     }
@@ -1060,6 +1109,15 @@
             document.getElementById('b-title').value = bounty.title;
             document.getElementById('b-desc').value = bounty.description || "";
             document.getElementById('b-reward').value = bounty.reward;
+        }else if(model == 3){ // 新增 memo 邏輯
+            // 注意：這裡需要 allMemos，等下在 loadTasks 定義
+            const memo = allMemos.find(t => t.id === id); // 暫時共用 allTasks 陣列或是新增 allMemos
+            if(!memo) return;
+            editingMemoId = id;
+            document.querySelector('#memoModal h3').innerText = "編輯備忘錄";
+            document.getElementById('memo-title').value = memo.title;
+            document.getElementById('memo-content').value = memo.content || ""; // 注意欄位名是 content
+            document.getElementById('memo-deadline').value = memo.deadline || "";
         }
         openModal(model, true);
     }
@@ -1071,6 +1129,9 @@
         }else if(model == 2){
             document.getElementById("bountyModal").style.display = "none";
             editingBountyId = null;
+        }else if(model == 3){ // 新增
+            document.getElementById("memoModal").style.display = "none";
+            editingMemoId = null;
         }
     }
 
@@ -1087,6 +1148,10 @@
             reward = document.getElementById('b-reward').value;
             last = parseInt(reward);
             if (isNaN(last) || last < 0)  return alert("請輸入正確的懸賞金額");
+        }else if(model == 3){ // 新增 memo 取值
+            title = document.getElementById('memo-title').value.trim();
+            desc = document.getElementById('memo-content').value.trim();
+            last = document.getElementById('memo-deadline').value;
         }
 
         if(!title)  return alert("請至少輸入標題");
@@ -1100,12 +1165,17 @@
             taskData.is_completed = false;
         }else if(model == 2){
             taskData.reward = last;
+        }else if(model == 3){
+            taskData.content = desc; // 注意：後端欄位叫 content
+            taskData.deadline = last;
+            taskData.is_completed = false;
         }
 
         try{
             let url, method = 'POST';
             if(model == 1)  url = '/tasks/';
             else if(model == 2)  url = '/bounty';
+            else if(model == 3) url = '/memos/';
 
             if(model == 1 && editingTaskId){
                 url = `/tasks/${editingTaskId}`;
@@ -1113,8 +1183,11 @@
             }else if(model == 2 && editingBountyId){
                 url = `/bounty/${editingBountyId}`;
                 method = 'PUT';
+            }else if(model == 3 && editingMemoId){
+                url = `/memos/${editingMemoId}`;
+                method = 'PUT';
             }
-
+            console.log("送出資料:", url, method, taskData);
             const res = await fetch(url, {
                 method: method,
                 headers: {"Content-Type": "application/json"},
@@ -1150,6 +1223,12 @@
                 items = await res.json();
                 allBounties = items;
                 list = document.getElementById("bounty-list-ul");
+            }else if(model == 3){ // Memo
+                res = await fetch('/memos/');
+                if (!res.ok) return;
+                items = await res.json(); 
+                allMemos = items; // 暫時共用變數方便 editTask 查找
+                list = document.getElementById('memo-list-ul');
             }
             list.innerHTML = '';
 
@@ -1157,7 +1236,7 @@
                 const li = document.createElement('li');
                 li.className = 'task-card';
 
-                if(model == 1){
+                if(model == 1 || model == 3){
                     if(item.is_completed) li.classList.add('task-completed');
 
                     let timeHtml = '';
@@ -1167,14 +1246,19 @@
                     }
 
                     const btnText = item.is_completed ? "↩️ 復原" : "✅ 完成";
+                    const toggleFunc = (model == 3) ? `toggleMemo(${item.id})` : `toggleTask(${item.id})`;
+                    const deleteFunc = `deleteTask(${model}, ${item.id})`;
+                    const descContent = (model == 3) ? item.content : item.description;
+                    
+                    
 
                     li.innerHTML = `
                         <div class="task-header">
                             <span class="task-title">${item.title}</span>
                             <div>
-                                <button class="btn-edit-task" onclick="editTask(1, ${item.id})">✏️ 編輯</button>
-                                <button class="btn-check" onclick="toggleTask(${item.id})">${btnText}</button>
-                                <button class="delete-btn" onclick="deleteTask(1, ${item.id})">刪除</button>
+                                <button class="btn-edit-task" onclick="editTask(${model}, ${item.id})">✏️ 編輯</button>
+                                <button class="btn-check" onclick="${toggleFunc}(${item.id})">${btnText}</button>
+                                <button class="delete-btn" onclick="deleteTask(${model}, ${item.id})">刪除</button>
                             </div>
                         </div>
                         <div class="task-meta">${timeHtml}</div>
@@ -1231,11 +1315,26 @@
                     method: 'DELETE',
                     credentials: 'include'
                 });
+            }else if(model == 3){
+                await fetch(`/memos/${id}`, {method: 'DELETE'});
             }
             loadTasks(model);
         }catch(error){
             console.error("刪除失敗:", error);
             alert("刪除失敗");
+        }
+    }
+    async function toggleMemo(memoId){
+        try{
+            const res = await fetch(`/memos/${memoId}/toggle`, { method: 'PUT' });
+            if(res.ok){
+                loadTasks(3); // 重新載入 Memo 列表
+            }else{
+                alert("更新失敗");
+            }
+        }catch(e){
+            console.error(e);
+            alert("連線錯誤");
         }
     }
 
@@ -1797,7 +1896,6 @@
             }
         }, 10000); // 每10秒檢查一次
     }
-
 </script>
 </body>
 </html>
