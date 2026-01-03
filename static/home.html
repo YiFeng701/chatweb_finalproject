@@ -640,6 +640,49 @@
             gap: 10px;
             align-items: center;
         }
+        /* 任務頁面上方工具列 */
+        .task-top-bar{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-right: 70px;
+        }
+
+        /* 任務分類按鈕區 */
+        .task-tabs{
+            display: flex;
+            flex: 1;
+            align-items: flex-end;
+            gap: 0;
+            position: relative;
+            border-bottom: 2px solid #1abc9c;
+        }
+
+        /* 任務分類按鈕樣式（仿 sidebar nav-btn） */
+        .task-tab{
+            flex: 1;                /* 平均分配空間 */
+            text-align: center;     /* 按鈕文字置中 */
+            background: none;
+            border: none;
+            color: #2c3e50;
+            padding: 8px 0;
+            cursor: pointer;
+            font-size: 14px;
+            border-radius: 8px 8px 0 0;
+            position: relative;
+        }
+
+        .task-tab:hover{
+            background: #dfe6e9;
+        }
+
+        /* 目前選中的分類 */
+        .task-tab.active{
+            background: #1abc9c;
+            color: white;
+            z-index: 3;
+        }
     </style>
 </head>
 <body>
@@ -683,7 +726,13 @@
         <!-- 任務頁面 -->
         <div id="section-task" class="page-section">
             <div id="task-container">
-                <div style="text-align: right; margin-bottom: 10px;">
+                <div class="task-top-bar">
+                    <div class="task-tabs">
+                        <button class="task-tab active" onclick="switchTaskTab('my')">📋 我的任務</button>
+                        <button class="task-tab" onclick="switchTaskTab('taken')">🧾 接取的懸賞</button>
+                        <button class="task-tab" onclick="switchTaskTab('posted')">💰 發布的懸賞</button>
+                    </div>
+
                     <button class="add-btn" onclick="openModal(1)">+ 新增任務</button>
                 </div>
                 <ul id="task-list-ul"></ul>
@@ -825,7 +874,20 @@
     let ws = null;
     let currentChatWith = null;
     let messageCheckInterval = null;
+    let currentTaskTab = 'my';
 
+    function switchTaskTab(tab){
+        currentTaskTab = tab;
+
+        // 切換 active 樣式
+        document.querySelectorAll('.task-tab').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+
+        // 之後你可以在這裡重新載入任務
+        // loadTasks(tab);
+    }
     // --- 共用與切換 ---
     function switchTab(tab){
         // 移除所有活動狀態
@@ -1537,7 +1599,7 @@
                 const nameInitial = conv.other_name ? conv.other_name.charAt(0).toUpperCase() : '?';
                 
                 // 格式化最後訊息時間
-                const lastTime = new Date(conv.last_time);
+                const lastTime = new Date(conv.last_time + 'Z');
                 const now = new Date();
                 const timeDiff = now - lastTime;
                 const hoursDiff = Math.floor(timeDiff / (1000 * 60 * 60));
@@ -1611,7 +1673,7 @@
                 const isMe = msg.sender_account !== account;
                 div.className = isMe ? 'message-me' : 'message-other';
                 div.innerHTML = `
-                    <small>${msg.sender_name} ${new Date(msg.created_at).toLocaleTimeString()}</small>
+                    <small>${msg.sender_name} ${new Date(msg.created_at + 'Z').toLocaleTimeString()}</small>
                     <div>${msg.content}</div>
                 `;
                 container.appendChild(div);
