@@ -401,9 +401,7 @@
             color: #34495e;
         }
 
-        .form-group input, 
-        .form-group textarea,
-        .form-group select{
+        .form-group input, .form-group textarea, .form-group select{
             width: 100%;
             padding: 8px;
             box-sizing: border-box; 
@@ -640,6 +638,7 @@
             gap: 10px;
             align-items: center;
         }
+
         /* 任務頁面上方工具列 */
         .task-top-bar{
             display: flex;
@@ -695,8 +694,8 @@
         <div class="nav-buttons">
             <button class="nav-btn active" onclick="switchTab('chat')">💬 聊天室</button>
             <button class="nav-btn" onclick="switchTab('task')">📋 我的任務</button>
-            <button class="nav-btn" onclick="switchTab('memo')">📝 備忘錄</button>
             <button class="nav-btn" onclick="switchTab('bounty')">💰 懸賞任務</button>
+            <button class="nav-btn" onclick="switchTab('memo')">📝 備忘錄</button>
             <button class="nav-btn" onclick="switchTab('friends')">👥 好友與私訊</button>
         </div>
     </div>
@@ -723,24 +722,13 @@
             </div>
         </div>
 
-        <!-- 備忘錄頁面 -->
-        <div id="section-memo" class="page-section">
-            <div id="task-container">
-                <div style="text-align: right; margin-bottom: 10px;">
-                    <button class="add-btn" onclick="openModal(3)">+ 新增備忘錄</button>
-                </div>
-                <ul id="memo-list-ul"></ul>
-            </div>
-        </div>
-
-
         <!-- 任務頁面 -->
         <div id="section-task" class="page-section">
             <div id="task-container">
                 <div class="task-top-bar">
                     <div class="task-tabs">
-                        <button class="task-tab active" onclick="switchTaskTab('taken')">🧾 接取的懸賞</button>
-                        <button class="task-tab" onclick="switchTaskTab('posted')">💰 發布的懸賞</button>
+                        <button class="task-tab active" data-tab="take" onclick="switchTaskTab('take')">🧾 接取的懸賞</button>
+                        <button class="task-tab" data-tab="post" onclick="switchTaskTab('post')">💰 發布的懸賞</button>
                     </div>
                 </div>
                 <ul id="task-list-ul"></ul>
@@ -754,6 +742,16 @@
                     <button class="add-btn" onclick="openModal(2)">+ 發布懸賞</button>
                 </div>
                 <ul id="bounty-list-ul"></ul>
+            </div>
+        </div>
+
+        <!-- 備忘錄頁面 -->
+        <div id="section-memo" class="page-section">
+            <div id="task-container">
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <button class="add-btn" onclick="openModal(3)">+ 新增備忘錄</button>
+                </div>
+                <ul id="memo-list-ul"></ul>
             </div>
         </div>
 
@@ -811,7 +809,7 @@
         </div>
     </div>
 
-    <!-- 新增備忘錄 Modal -->
+    <!-- 備忘錄 Modal -->
     <div id="memoModal" class="modal">
         <div class="modal-content">
             <h3>新增備忘錄</h3>
@@ -838,7 +836,7 @@
         </div>
     </div>
 
-    <!-- 新增好友 Modal -->
+    <!-- 好友 Modal -->
     <div id="addFriendModal" class="modal">
         <div class="modal-content">
             <h3>新增好友</h3>
@@ -888,15 +886,10 @@
 
     function switchTaskTab(tab){
         currentTaskTab = tab;
-
-        // 切換 active 樣式
         document.querySelectorAll('.task-tab').forEach(btn => {
-            btn.classList.remove('active');
+            btn.classList.toggle('active', btn.dataset.tab === tab);
         });
-        event.target.classList.add('active');
-
-        // 之後你可以在這裡重新載入任務
-        // loadTasks(tab);
+        loadTasks(1);
     }
     // --- 共用與切換 ---
     function switchTab(tab){
@@ -917,7 +910,7 @@
         }
         
         // 設定按鈕活動狀態
-        const btnMap = {chat: 0, task: 1, memo: 2, bounty: 3, friends: 4};
+        const btnMap = {chat: 0, task: 1, bounty: 2,memo: 3,  friends: 4};
         const navButtons = document.querySelectorAll('.nav-btn');
         if(navButtons[btnMap[tab]]){
             navButtons[btnMap[tab]].classList.add('active');
@@ -933,19 +926,10 @@
             loadFriends();
             loadFriendRequests();
         }else{
-            loadTasks(btnMap[tab])
-        }
-
-        if(tab === 'task'){
-            loadTasks(1);
-        }else if(tab === 'bounty'){
-            loadTasks(2);
-        }else if(tab === 'memo'){
-            loadTasks(3)
-        }else if(tab === 'friends'){
-            
-        }else if(tab === 'chat'){
-            
+            if(btnMap[tab] == 1)
+                switchTaskTab('take');
+            else
+                loadTasks(btnMap[tab]);
         }
     }
 
@@ -1225,7 +1209,17 @@
         try{
             let res, list, items;
             
-            if(model == 2){
+            if(model == 1){
+                let url = '';
+                if(currentTaskTab == 'take')
+                    url = '/bounty/my/taker';
+                else if(currentTaskTab == 'post')
+                    url = '/bounty/my/owner';
+                res = await fetch(url);
+                if(!res.ok) return;
+                items = await res.json();
+                list = document.getElementById("task-list-ul");
+            }else if(model == 2){
                 res = await fetch("/bounty/open");
                 if(!res.ok) return;
                 items = await res.json();
@@ -1235,18 +1229,17 @@
                 res = await fetch('/memos/');
                 if (!res.ok) return;
                 items = await res.json(); 
-                allMemos = items; // 暫時共用變數方便 editTask 查找
+                allMemos = items;
                 list = document.getElementById('memo-list-ul');
             }
+
             list.innerHTML = '';
 
             items.forEach(item => {
                 const li = document.createElement('li');
                 li.className = 'task-card';
 
-                if(model == 2){
-                    if(item.status == 'finish') li.classList.add('task-completed');
-
+                if(model == 1){
                     li.innerHTML = `
                         <div class="task-header">
                             <div class="task-info-container">
@@ -1254,8 +1247,29 @@
                                 <span class="reward-amount">💰 ${item.reward}</span>
                             </div>
                             <div>
-                                <button class="btn-edit-task" onclick="editTask(2, ${item.id})">✏️ 編輯</button>
-                                <button class="delete-btn" onclick="deleteTask(2, ${item.id})">刪除</button>
+                                ${currentTaskTab === 'post'
+                                    ? `<button class="btn-edit-task" onclick="editTask(2, ${item.id})">✏️ 編輯</button>
+                                       <button class="delete-btn" onclick="deleteTask(2, ${item.id})">刪除</button>`
+                                    : ''
+                                }
+                            </div>
+                        </div>
+                        <div class="task-meta">
+                            ${currentTaskTab === 'take'
+                                ? `發布者：${item.owner}`
+                                : `接取者：${item.taker}`
+                            }
+                        </div>
+                        <div class="task-desc">${item.description || '(無詳細說明)'}</div>
+                    `;
+                }else if(model == 2){
+                    if(item.status == 'finish') li.classList.add('task-completed');
+
+                    li.innerHTML = `
+                        <div class="task-header">
+                            <div class="task-info-container">
+                                <span class="task-title">${item.title}</span>
+                                <span class="reward-amount">💰 ${item.reward}</span>
                             </div>
                         </div>
                         <div class="task-meta">發布者 : ${item.owner_name}</div>

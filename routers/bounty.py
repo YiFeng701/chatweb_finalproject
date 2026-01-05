@@ -88,9 +88,9 @@ def finish_bounty(id: int, account: str = Depends(get_user)):
         conn.commit()
     return {"success": True, "message": "任務完成"}
 
-# 5. 我街的任務
-@router.get("/my")
-def get_my_bounty(account: str = Depends(get_user)):
+# 5-1. 我街的任務
+@router.get("/my/taker")
+def get_my_take_bounty(account: str = Depends(get_user)):
     if not account:
         raise HTTPException(status_code=401, detail="請先登入")
     with sqlite3.connect("user.db") as conn:
@@ -100,6 +100,23 @@ def get_my_bounty(account: str = Depends(get_user)):
             SELECT id, title, description, reward, owner
             FROM bounty
             WHERE taker = ?
+            ORDER BY id DESC
+        """, (account, ))
+        rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+# 5-2. 我發的任務
+@router.get("/my/owner")
+def get_my_post_bounty(account: str = Depends(get_user)):
+    if not account:
+        raise HTTPException(status_code=401, detail="請先登入")
+    with sqlite3.connect("user.db") as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, title, description, reward, taker
+            FROM bounty
+            WHERE owner = ?
             ORDER BY id DESC
         """, (account, ))
         rows = cur.fetchall()
