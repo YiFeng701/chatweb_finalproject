@@ -14,7 +14,7 @@ import uuid
 # 從 dependencies.py 導入 JWT 相關函式 請確保同一層目錄下有 dependencies.py
 from dependencies import create_access_token, create_refresh_token, verify_token, get_user
 # 從 routers 資料夾導入任務和懸賞系統 確保有 routers 資料夾，裡面有 tasks.py
-from routers import tasks, bounty, memo
+from routers import bounty, memo
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -163,7 +163,6 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # **關鍵步驟：掛載任務系統的 Router**
-app.include_router(tasks.router)
 app.include_router(bounty.router)
 app.include_router(friends.router)
 app.include_router(memo.router)
