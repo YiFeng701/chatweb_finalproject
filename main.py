@@ -94,18 +94,7 @@ CREATE TABLE IF NOT EXISTS messages(
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-# 3. Tasks 表 (新增的任務系統表格)
-first_cur.execute("""
-CREATE TABLE IF NOT EXISTS tasks(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account TEXT,
-    title TEXT,
-    description TEXT,       -- 新增：細節
-    deadline TEXT,          -- 新增：最後時間
-    is_completed BOOLEAN DEFAULT 0
-)
-""")
-# 4. Bounty 表 (懸賞任務:大家都可以接取)
+# 3. Bounty 表 (懸賞任務:大家都可以接取)
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS bounty(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,8 +107,7 @@ CREATE TABLE IF NOT EXISTS bounty(
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-
-# 5. Friends 表 (好友系統)
+# 4. Friends 表 (好友系統)
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS friends(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,7 +118,7 @@ CREATE TABLE IF NOT EXISTS friends(
     UNIQUE(user_account, friend_account)
 )
 """)
-# 6. Private Messages 表 (私訊系統)
+# 5. Private Messages 表 (私訊系統)
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS private_messages(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,7 +129,7 @@ CREATE TABLE IF NOT EXISTS private_messages(
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
-#7.  memos表
+# 6.  memos 表
 first_cur.execute("""
 CREATE TABLE IF NOT EXISTS memos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
