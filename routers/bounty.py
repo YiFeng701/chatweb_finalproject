@@ -97,7 +97,7 @@ def get_my_take_bounty(account: str = Depends(get_user)):
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, title, description, reward, owner
+            SELECT id, title, description, reward, owner, status
             FROM bounty
             WHERE taker = ?
             ORDER BY id DESC
@@ -114,7 +114,7 @@ def get_my_post_bounty(account: str = Depends(get_user)):
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, title, description, reward, taker
+            SELECT id, title, description, reward, taker, status
             FROM bounty
             WHERE owner = ?
             ORDER BY id DESC

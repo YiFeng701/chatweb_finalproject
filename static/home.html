@@ -435,7 +435,7 @@
         }
         
         /* 已完成任務的樣式 */
-        .task-completed .task-info-container .task-title{
+        .task-completed .task-title{
             text-decoration: line-through;
             color: #95a5a6;
         }
@@ -680,6 +680,20 @@
             background: #1abc9c;
             color: white;
             z-index: 3;
+        }
+
+        .task-status-label{
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #ecf0f1;
+            margin-left: 6px;
+        }
+
+        .task-completed .task-status-label{
+            background: #e8f6f3;
+            color: #16a085;
         }
     </style>
 </head>
@@ -1124,7 +1138,7 @@
             editingMemoId = id;
             document.querySelector('#memoModal h3').innerText = "編輯備忘錄";
             document.getElementById('memo-title').value = memo.title;
-            document.getElementById('memo-content').value = memo.content || "";
+            document.getElementById('memo-content').value = memo.description || "";
             document.getElementById('memo-deadline').value = memo.deadline || "";
         }
         openModal(model, true);
@@ -1241,6 +1255,8 @@
 
                 if(model == 1){
                     if(item.status == 'finish') li.classList.add('task-completed');
+                    const btnText = item.status == 'finish' ? "✅ 已完成" : "❌ 未完成";
+
                     li.innerHTML = `
                         <div class="task-header">
                             <div class="task-info-container">
@@ -1250,9 +1266,11 @@
                             <div>
                                 ${currentTaskTab === 'post'
                                     ? `<button class="btn-edit-task" onclick="editTask(2, ${item.id})">✏️ 編輯</button>
-                                       <button class="btn-check" onclick="finishBounty(${item.id})">✅ 完成</button>
+                                       <button class="btn-check" onclick="finishBounty(${item.id})">${btnText}</button>
                                        <button class="delete-btn" onclick="deleteTask(2, ${item.id})">刪除</button>`
-                                    : ''
+                                    : currentTaskTab === 'take'
+                                        ? `<span class="task-status-label">${btnText}</span>`
+                                        : ''
                                 }
                             </div>
                         </div>
@@ -1335,7 +1353,7 @@
             alert("刪除失敗");
         }
     }
-    async function toggleMemo(model, id){
+    async function toggleMemo(id){
         try{
             const res = await fetch(`/memos/${id}/toggle`, { method: 'PUT' });
             if(res.ok){
@@ -1374,15 +1392,13 @@
             if(res.ok){
                 const data = await res.json();
                 alert(data.message);
-                const bounty = allBounties.find(b => b.id === id);
-                if(bounty) bounty.status = 'finish';
                 loadTasks(1);
             }else{
                 const error = await res.json();
                 alert(error.message);
             }
         }catch(err){
-            console.err("確認失敗:", err);
+            console.error("確認失敗:", err);
             alert("確認失敗");
         }
     }
