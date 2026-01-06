@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS memos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account TEXT NOT NULL,
     title TEXT NOT NULL,
-    content TEXT,
+    description TEXT,
     deadline TEXT,                   
     is_completed BOOLEAN DEFAULT 0,  
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

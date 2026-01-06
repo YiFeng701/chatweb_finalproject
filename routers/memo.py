@@ -12,7 +12,7 @@ router = APIRouter(
 # 定義傳入的資料格式
 class MemoModel(BaseModel):
     title: str
-    content: Optional[str] = None  # 內容
+    description: Optional[str] = None  # 內容
     deadline: Optional[str] = None # 加回：截止日期
     is_completed: bool = False     # 加回：預設為未完成
 
@@ -25,9 +25,9 @@ def create_memo(memo: MemoModel, account: str = Depends(get_user)):
     with sqlite3.connect("user.db") as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO memos (account, title, content, deadline, is_completed) 
+            """INSERT INTO memos (account, title, description, deadline, is_completed) 
                VALUES (?, ?, ?, ?, ?)""",
-            (account, memo.title, memo.content, memo.deadline, memo.is_completed)
+            (account, memo.title, memo.description, memo.deadline, memo.is_completed)
         )
         conn.commit()
     return {"success": True, "message": "備忘錄已新增"}
@@ -88,9 +88,9 @@ def update_memo(memo_id: int, memo: MemoModel, account: str = Depends(get_user))
         # 更新：包含 deadline
         cur.execute(
             """UPDATE memos 
-               SET title = ?, content = ?, deadline = ?
+               SET title = ?, description = ?, deadline = ?
                WHERE id = ? AND account = ?""",
-            (memo.title, memo.content, memo.deadline, memo_id, account)
+            (memo.title, memo.description, memo.deadline, memo_id, account)
         )
         conn.commit()
     return {"success": True, "message": "備忘錄已更新"}

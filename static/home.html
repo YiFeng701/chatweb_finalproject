@@ -435,7 +435,7 @@
         }
         
         /* 已完成任務的樣式 */
-        .task-completed .task-title{
+        .task-completed .task-info-container .task-title{
             text-decoration: line-through;
             color: #95a5a6;
         }
@@ -1119,13 +1119,12 @@
             document.getElementById('b-desc').value = bounty.description || "";
             document.getElementById('b-reward').value = bounty.reward;
         }else if(model == 3){ // 新增 memo 邏輯
-            // 注意：這裡需要 allMemos，等下在 loadTasks 定義
-            const memo = allMemos.find(t => t.id === id); // 暫時共用 allTasks 陣列或是新增 allMemos
+            const memo = allMemos.find(t => t.id === id);
             if(!memo) return;
             editingMemoId = id;
             document.querySelector('#memoModal h3').innerText = "編輯備忘錄";
             document.getElementById('memo-title').value = memo.title;
-            document.getElementById('memo-content').value = memo.content || ""; // 注意欄位名是 content
+            document.getElementById('memo-content').value = memo.content || "";
             document.getElementById('memo-deadline').value = memo.deadline || "";
         }
         openModal(model, true);
@@ -1166,7 +1165,6 @@
         if(model == 2){
             taskData.reward = last;
         }else if(model == 3){
-            taskData.content = desc; // 注意：後端欄位叫 content
             taskData.deadline = last;
             taskData.is_completed = false;
         }
@@ -1194,6 +1192,7 @@
 
             if(res.ok){
                 closeModal(model);
+                if(currentTaskTab == 'post') model = 1;
                 loadTasks(model);
             }else{
                 const error = await res.json();
@@ -1218,6 +1217,7 @@
                 res = await fetch(url);
                 if(!res.ok) return;
                 items = await res.json();
+                allBounties = items;
                 list = document.getElementById("task-list-ul");
             }else if(model == 2){
                 res = await fetch("/bounty/open");
@@ -1240,6 +1240,7 @@
                 li.className = 'task-card';
 
                 if(model == 1){
+                    if(item.status == 'finish') li.classList.add('task-completed');
                     li.innerHTML = `
                         <div class="task-header">
                             <div class="task-info-container">
@@ -1249,6 +1250,7 @@
                             <div>
                                 ${currentTaskTab === 'post'
                                     ? `<button class="btn-edit-task" onclick="editTask(2, ${item.id})">✏️ 編輯</button>
+                                       <button class="btn-check" onclick="finishBounty(${item.id})">✅ 完成</button>
                                        <button class="delete-btn" onclick="deleteTask(2, ${item.id})">刪除</button>`
                                     : ''
                                 }
@@ -1257,14 +1259,12 @@
                         <div class="task-meta">
                             ${currentTaskTab === 'take'
                                 ? `發布者：${item.owner}`
-                                : `接取者：${item.taker}`
+                                : `接取者：${item.taker || '無'}`
                             }
                         </div>
                         <div class="task-desc">${item.description || '(無詳細說明)'}</div>
                     `;
                 }else if(model == 2){
-                    if(item.status == 'finish') li.classList.add('task-completed');
-
                     li.innerHTML = `
                         <div class="task-header">
                             <div class="task-info-container">
@@ -1310,14 +1310,24 @@
     async function deleteTask(model, id){
         if(!confirm("確定刪除?")) return;
         
-        try{
-            if(model == 2) {
-                await fetch(`/bounty/${id}`, {
+        try {
+            let res;
+
+            if (model == 2) {
+                res = await fetch(`/bounty/${id}`, {
                     method: 'DELETE',
                     credentials: 'include'
                 });
-            }else if(model == 3){
-                await fetch(`/memos/${id}`, {method: 'DELETE'});
+            } else if (model == 3) {
+                res = await fetch(`/memos/${id}`, {
+                    method: 'DELETE'
+                });
+            }
+
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.detail || "刪除失敗");
+                return;
             }
             loadTasks(model);
         }catch(error){
@@ -1325,9 +1335,9 @@
             alert("刪除失敗");
         }
     }
-    async function toggleMemo(memoId){
+    async function toggleMemo(model, id){
         try{
-            const res = await fetch(`/memos/${memoId}/toggle`, { method: 'PUT' });
+            const res = await fetch(`/memos/${id}/toggle`, { method: 'PUT' });
             if(res.ok){
                 loadTasks(3); // 重新載入 Memo 列表
             }else{
@@ -1345,16 +1355,35 @@
 
         try{
             const res = await fetch(`/bounty/${id}/take`, { method: "POST" });
+            const data = res.json();
             if(res.ok){
                 alert("成功接取任務");
                 loadTasks(2);
             }else{
                 const error = await res.json();
-                alert(error.message || "接取失敗");
+                alert(error.message);
             }
         }catch(error){
             console.error("接取失敗:", error);
             alert("接取失敗");
+        }
+    }
+    async function finishBounty(id) {
+        try{
+            const res = await fetch(`/bounty/${id}/finish`, { method: "POST" });
+            if(res.ok){
+                const data = await res.json();
+                alert(data.message);
+                const bounty = allBounties.find(b => b.id === id);
+                if(bounty) bounty.status = 'finish';
+                loadTasks(1);
+            }else{
+                const error = await res.json();
+                alert(error.message);
+            }
+        }catch(err){
+            console.err("確認失敗:", err);
+            alert("確認失敗");
         }
     }
 
