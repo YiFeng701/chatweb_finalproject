@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS bounty(
     title TEXT,
     description TEXT,
     reward INTEGER,             --報酬
-    status TEXT DEFAULT 'open', --open / take / finish / cancel
+    status TEXT DEFAULT 'open', --open / take / finish / review
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)

@@ -67,7 +67,28 @@ def take_bounty(id: int, account: str = Depends(get_user)):
         conn.commit()
     return {"success": True, "message": "任務接取成功"}
 
-# 4. 完成任務
+# 4. 提交任務
+@router.post("/{id}/submit")
+def submit_bounty(id: int, account: str = Depends(get_user)):
+    if not account:
+        raise HTTPException(status_code=401, detail="請先登入")
+    with sqlite3.connect("user.db") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT taker, status FROM bounty WHERE id = ?", (id, ))
+        row = cur.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="任務不存在")
+        if row[0] != account:
+            raise HTTPException(status_code=400, detail="只有接取者可以提交")
+        if row[1] != 'take':
+            raise HTTPException(status_code=400, detail="任務狀態錯誤，無法提交")
+        
+        cur.execute("UPDATE bounty SET status = 'submit' WHERE id = ?", (id, ))
+        conn.commit()
+    return {"success": True, "message": "任務已提交審核"}
+
+# 5. 完成任務
 @router.post("/{id}/finish")
 def finish_bounty(id: int, account: str = Depends(get_user)):
     if not account:
@@ -81,14 +102,14 @@ def finish_bounty(id: int, account: str = Depends(get_user)):
             raise HTTPException(status_code=404, detail="任務不存在")
         if row[0] != account:
             raise HTTPException(status_code=400, detail="只有發布者可以結束任務")
-        if row[2] != 'take':
+        if row[2] not in ['take', 'submit']:
             raise HTTPException(status_code=400, detail="任務未被接取")
 
         cur.execute("UPDATE bounty SET status = 'finish' WHERE id = ?", (id, ))
         conn.commit()
     return {"success": True, "message": "任務完成"}
 
-# 5-1. 我街的任務
+# 6-1. 我街的任務
 @router.get("/my/taker")
 def get_my_take_bounty(account: str = Depends(get_user)):
     if not account:
@@ -105,7 +126,7 @@ def get_my_take_bounty(account: str = Depends(get_user)):
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
-# 5-2. 我發的任務
+# 6-2. 我發的任務
 @router.get("/my/owner")
 def get_my_post_bounty(account: str = Depends(get_user)):
     if not account:
@@ -122,7 +143,7 @@ def get_my_post_bounty(account: str = Depends(get_user)):
         rows = cur.fetchall()
     return [dict(r) for r in rows]
 
-# 6. 刪除任務
+# 7. 刪除任務
 @router.delete("/{id}")
 def delete_task(id: int, account: str = Depends(get_user)):
     if not account:
@@ -144,7 +165,7 @@ def delete_task(id: int, account: str = Depends(get_user)):
 
     return {"success": True, "message": "任務已刪除"}
 
-# 7. 修改任務 (編輯)
+# 8. 修改任務 (編輯)
 @router.put("/{id}")
 def update_task(id: int, bounty: Bounty, account: str = Depends(get_user)):
     if not account:
